@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0E0B16">
+<title>CAMEO · 酒令派对</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; min-height:100%;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    background:
+      radial-gradient(900px 520px at 50% -10%, rgba(214,171,84,.20), transparent 62%),
+      radial-gradient(700px 480px at 85% 108%, rgba(120,60,180,.22), transparent 66%),
+      #0E0B16;
+    color:#F5EFE6; display:flex; flex-direction:column; align-items:center;
+    padding:26px 20px calc(30px + env(safe-area-inset-bottom));
+    min-height:100vh; min-height:100dvh;
+  }
+  .logo{font-size:13px; letter-spacing:.42em; color:#D6AB54; font-weight:800; margin-top:6px;}
+  .logo b{color:#F5EFE6;}
+  h1{margin:14px 0 4px; font-size:27px; letter-spacing:1px; font-weight:900; text-align:center;}
+  .sub{margin:0 0 6px; font-size:13px; color:#9A8FA8; text-align:center;}
+  .tablebadge{
+    display:inline-flex; align-items:center; gap:8px; margin:12px 0 24px;
+    padding:8px 18px; border-radius:999px; font-size:15px; font-weight:900; letter-spacing:1px;
+    color:#FFE6A8; background:rgba(214,171,84,.12); border:1px solid rgba(214,171,84,.45);
+  }
+  .tablebadge span{opacity:.6; font-weight:700; font-size:12px; letter-spacing:.05em;}
+  .cards{width:100%; max-width:440px; display:flex; flex-direction:column; gap:14px;}
+  .card{
+    position:relative; display:flex; align-items:center; gap:16px; width:100%;
+    padding:20px 18px; border-radius:20px; text-align:left; cursor:pointer;
+    border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.045);
+    color:inherit; font:inherit; transition:transform .12s ease, box-shadow .18s ease, border-color .18s;
+  }
+  .card:active{transform:scale(.982);}
+  .card .ico{
+    flex:0 0 58px; height:58px; border-radius:17px; display:flex; align-items:center; justify-content:center;
+    font-size:30px; line-height:1;
+  }
+  .card .txt{flex:1; min-width:0;}
+  .card .t1{font-size:19px; font-weight:900; letter-spacing:.5px; display:flex; align-items:center; gap:7px;}
+  .card .t2{margin-top:5px; font-size:12.5px; line-height:1.5; color:#A99FB8;}
+  .card .arrow{flex:0 0 auto; font-size:20px; color:rgba(255,255,255,.35);}
+  .card.party{
+    background:linear-gradient(135deg, rgba(214,171,84,.20), rgba(120,60,180,.16));
+    border-color:rgba(214,171,84,.55); box-shadow:0 14px 34px -18px rgba(214,171,84,.75);
+  }
+  .card.party .ico{background:linear-gradient(140deg,#F0C86B,#B4762C); color:#2A1B06; box-shadow:0 8px 18px -10px rgba(240,200,107,.9);}
+  .tag{
+    font-size:10.5px; font-weight:900; padding:2px 7px; border-radius:999px; letter-spacing:.04em;
+    background:rgba(120,220,150,.16); color:#7EE3A2; border:1px solid rgba(120,220,150,.35);
+  }
+  .foot{margin-top:auto; padding-top:26px; text-align:center; font-size:11.5px; line-height:1.9; color:#6E647D;}
+  .foot b{color:#9A8FA8; font-weight:700;}
+  .toastbox{
+    position:fixed; left:50%; bottom:calc(30px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px);
+    background:rgba(20,16,30,.96); border:1px solid rgba(255,255,255,.14); color:#F5EFE6;
+    padding:11px 18px; border-radius:14px; font-size:13.5px; max-width:86vw; text-align:center;
+    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:99;
+  }
+  .toastbox.on{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+  <div class="logo">C A M E O <b>·</b> 酒 令 派 对</div>
+  <h1>开一局？</h1>
+  <p class="sub">云端 7×24 在线 · 电脑关机也能玩</p>
+  <div class="tablebadge" id="tb" style="display:none;"><em style="font-style:normal;">—</em> 号桌</div>
+
+  <div class="cards">
+    <button class="card party" id="btnParty">
+      <span class="ico">🎉</span>
+      <span class="txt">
+        <span class="t1">酒令派对 <span class="tag">随时可玩</span></span>
+        <span class="t2">女巫的毒药 · 天命轮盘 · 大话骰 · 谁是卧底<br>扫同一张码的人自动同房，动作全桌同步</span>
+      </span>
+      <span class="arrow">›</span>
+    </button>
+  </div>
+
+  <div class="foot" id="foot">
+    <b>扫同一张桌卡的人自动进同一桌派对</b><br>
+    第一个进来的是房主 · 可以邀请微信好友
+  </div>
+
+  <div class="toastbox" id="toast"></div>
+
+<script>
+(function () {
+  var tb = document.getElementById('tb');
+  var btnParty = document.getElementById('btnParty');
+
+  /* 桌号：URL ?t=D1 优先，其次记住上次的 */
+  var table = (location.search.match(/[?&]t=([^&]*)/) || [])[1];
+  table = table ? decodeURIComponent(table).trim().toUpperCase() : '';
+  if (!table) { try { table = (localStorage.getItem('jl_last_table') || '').toUpperCase(); } catch (e) {} }
+  if (table) {
+    try { localStorage.setItem('jl_last_table', table); } catch (e) {}
+    tb.style.display = 'inline-flex';
+    tb.innerHTML = table + ' 号桌 <span>· 同桌的人会自动进同一个派对</span>';
+  }
+
+  btnParty.onclick = function () {
+    var q = table ? ('?t=' + encodeURIComponent(table) + '&join=1') : '';
+    location.href = './game.html' + q;
+  };
+})();
+</script>
+</body>
+</html>
