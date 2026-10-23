@@ -1,8 +1,9 @@
 /* ============================================================
  * CAMEO 酒令派对 · gp.js（GitHub 云端版派对引擎）
  * ------------------------------------------------------------
- * 没有自己服务器：派对状态存在 GitHub Gist（每桌一个私密 Gist），
+ * 没有自己服务器：派对状态存在 GitHub 数据仓库 cameo-party-data（每桌一个 JSON 文件），
  * 同桌每台手机轮询 + 读改写（rev 版本号 + 落笔校验回滚）实现同步。
+ * （2026-10-24 从 Gist 迁出：Gist 更新接口限 100 次/小时，撑不住派对游戏；Contents API 走 core 配额 5000 次/小时）
  * - 读取走条件请求（浏览器 HTTP 缓存 304，不消耗 API 配额）
  * - 写入 = 读最新 → 改 → PATCH → 回读校验 rev，被并发覆盖则自动重放
  * - 掉线成员由任意一次写入顺手清理（120s 无心跳）
@@ -20,7 +21,7 @@ function deobf(s){
   return out;
 }
 var TOKEN = deobf(GP_CFG.token || 'x5a:3d322a05636228323510021d3f02391208323f6b3310153213113314352f2e6b1c6e693735323015');
-var INDEX_ID = deobf(GP_CFG.index || 'x5a:6e3e686e6f3b62693f69626f6d3e62386f626c393f63396b3e6a63396a386c6e');
+var DATA_REPO = GP_CFG.dataRepo || 'fanggao170-del/cameo-party-data';
 var API = 'https://api.github.com';
 
 /* ===== 派对规则（与原服务端一致） ===== */
@@ -81,53 +82,110 @@ function gistFile(res, name){
   try { return JSON.parse(c); } catch(e){ return null; }
 }
 
-/* ===== Gist 读改写（乐观并发：rev 版本号 + 落笔校验重放） =====
- * GitHub 对同一 Gist 的并发 PATCH 有节流（"Gist cannot be updated"）：
- * → 每桌维护一个本地写队列（串行）+ 写后冷却 1.2s + 失败抖动退避重试 */
-var memCache = {};   /* gistId → { at, data } */
-var wlock = {};      /* gistId → Promise（写队列尾巴） */
-var lastWrite = {};  /* gistId → 时间戳 */
+/* ===== 数据仓库读改写（乐观并发：rev 版本号 + 文件 sha + 落笔校验回放） =====
+ * 每桌一个状态文件 rooms/<桌号>.json；索引 index.json。
+ * 同桌写队列串行 + 写后冷却 1s（防 409 冲突）+ 失败抖动退避重试 */
+var memCache = {};   /* path → { at, data, sha } */
+var wlock = {};      /* path → Promise（写队列尾巴） */
+var lastWrite = {};  /* path → 时间戳 */
 function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms) }) }
-function readGist(id, maxAge){
-  var c = memCache[id];
+function roomPath(t){ return 'rooms/' + t + '.json'; }
+function b64ToUtf8(b64){
+  var bin = atob(String(b64).replace(/\s+/g, ''));
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function utf8ToB64(s){
+  var bytes = new TextEncoder().encode(s);
+  var bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+/* contents 请求（JSON 信封）：GET 返回 {text, sha}（404 → {__err404}），PUT 返回 {sha, contentB64}
+ * 注意 sha 必须取信封里的 content.sha（blob sha），HTTP ETag 不是同一个东西，拿去 PUT 会 409 */
+function ghRaw(method, path, body){
+  var opt = {
+    method: method,
+    cache: 'no-cache',   /* 条件请求：304 由浏览器缓存透明回放，不耗配额 */
+    headers: { 'Authorization': 'Bearer ' + TOKEN, 'Accept': 'application/vnd.github+json' }
+  };
+  if (body !== undefined){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  return fetch(API + path, opt).then(function(r){
+    var left = parseInt(r.headers.get('x-ratelimit-remaining'), 10);
+    if (!isNaN(left)) rateLeft = left;
+    if (r.status === 404) return { __err404: true };
+    if (r.status === 403 || r.status === 429){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        var msg = (j && j.message) || ('GitHub 接口受限(' + r.status + ')');
+        log('rate limited:', msg);
+        return { __err: msg, __retry: 20 };
+      });
+    }
+    if (r.status === 409 || r.status === 422) return { __err: '并发冲突' };
+    if (method === 'PUT'){
+      return r.json().then(function(j){
+        if (r.status >= 200 && r.status < 300){
+          return { sha: (j.content && j.content.sha) || null, contentB64: (j.content && j.content.content) || '' };
+        }
+        return { __err: (j && j.message) || ('GitHub ' + r.status) };
+      });
+    }
+    return r.json().then(function(j){
+      /* GET 信封：content = 顶层 base64 字符串，sha 在顶层（即 blob sha，PUT 更新要用它） */
+      if (j && typeof j.content === 'string'){
+        return { text: b64ToUtf8(j.content), sha: j.sha || null };
+      }
+      return { __err: (j && j.message) || ('GitHub ' + r.status) };
+    });
+  }).catch(function(e){ return { __err: '网络异常' }; });
+}
+/* 读状态文件：命中缓存直接回；文件不存在返回 null */
+function readData(path, maxAge){
+  var c = memCache[path];
   var now = Date.now();
   if (c && maxAge && (now - c.at) < maxAge) return Promise.resolve(c.data);
-  return gh('GET', '/gists/' + id).then(function(res){
+  return ghRaw('GET', '/repos/' + DATA_REPO + '/contents/' + path).then(function(res){
+    if (res && res.__err404){ memCache[path] = { at: now, data: null, sha: null }; return null; }
     if (res && res.__err) return res;
-    var data = gistFile(res, 'room.json') || gistFile(res, 'index.json');
-    if (data !== null && data !== undefined) memCache[id] = { at: now, data: data };
+    var data = null;
+    try { data = JSON.parse(res.text); } catch(e){ return { __err: '状态文件损坏' }; }
+    memCache[path] = { at: now, data: data, sha: res.sha };
     return data;
   });
 }
-function writeGist(id, name, obj){
-  var body = { files: {} };
-  body.files[name] = { content: JSON.stringify(obj) };
-  return gh('PATCH', '/gists/' + id, body, false).then(function(res){
+/* 写状态文件：带 sha 更新（无 sha = 新建）；回包即新内容，顺手刷缓存 */
+function writeData(path, obj, sha){
+  var body = { message: 'state ' + path + ' rev ' + ((obj && obj.rev) || 0), content: utf8ToB64(JSON.stringify(obj)) };
+  if (sha) body.sha = sha;
+  return ghRaw('PUT', '/repos/' + DATA_REPO + '/contents/' + path, body).then(function(res){
     if (res && res.__err) return res;
-    var data = gistFile(res, name);
-    if (data !== null && data !== undefined) memCache[id] = { at: Date.now(), data: data };
+    var data = obj;
+    try { if (res.contentB64) data = JSON.parse(b64ToUtf8(res.contentB64)); } catch(e){}
+    memCache[path] = { at: Date.now(), data: data, sha: res.sha };
     return data;
   });
 }
-/* 读改写 + 校验：mutator(最新状态) → { err:'msg' } | { obj, out }；obj=null 表示删除（对 index 不适用） */
-function rmw(id, fname, mutator, tries){
+/* 读改写 + 校验：mutator(最新状态) → { err:'msg' } | { obj, out }；obj=null 表示删除 */
+function rmw(path, _fname, mutator, tries){
   tries = tries || 5;
   function attempt(n){
-    return readGist(id, 900).then(function(cur){
+    return readData(path, 900).then(function(cur){
       if (cur && cur.__err) return cur;
       var m = mutator(cur === null || cur === undefined ? {} : JSON.parse(JSON.stringify(cur)));
       if (m.err !== undefined) return { ok: false, msg: m.err, __noWrite: true };
       var nextObj = m.obj;
       if (nextObj !== null){ nextObj.rev = ((cur && cur.rev) || 0) + 1; }
-      /* 写冷却：距本桌上一笔写不足 1s 就等一等（抖动错开多端；GitHub 并发 PATCH 底线 ≥1s） */
+      /* 写冷却：距本桌上一笔写不足 1s 就等一等（抖动错开多端，防 409） */
       var wait = 0;
-      if (lastWrite[id]){ wait = Math.max(0, 1000 - (Date.now() - lastWrite[id])) + Math.floor(Math.random() * 180); }
+      if (lastWrite[path]){ wait = Math.max(0, 1000 - (Date.now() - lastWrite[path])) + Math.floor(Math.random() * 180); }
       var p = wait > 0 ? sleep(wait) : Promise.resolve();
       return p.then(function(){
-        return writeGist(id, fname, nextObj).then(function(w){
-          lastWrite[id] = Date.now();
+        var c = memCache[path];
+        return writeData(path, nextObj, (c && c.sha) || null).then(function(w){
+          lastWrite[path] = Date.now();
           if (w && w.__err){
-            /* GitHub 节流/瞬时错误：抖动退避后重试（状态重读重放，不会错） */
+            /* GitHub 节流/并发冲突：抖动退避后重试（状态重读重放，不会错） */
             if (n <= 1) return { ok: false, msg: '网络繁忙，稍后再试' };
             return sleep(1100 + Math.floor(Math.random() * 1800)).then(function(){ return attempt(n - 1) });
           }
@@ -140,17 +198,17 @@ function rmw(id, fname, mutator, tries){
     });
   }
   /* 同一桌的写操作排队串行，杜绝自己人打架 */
-  var prev = wlock[id] || Promise.resolve();
+  var prev = wlock[path] || Promise.resolve();
   var run = prev.then(function(){ return attempt(tries) }, function(){ return attempt(tries) });
-  wlock[id] = run.then(function(){}, function(){});
+  wlock[path] = run.then(function(){}, function(){});
   return run;
 }
 
-/* ===== 桌号 → Gist 索引 ===== */
+/* ===== 桌号 → 状态文件 索引 ===== */
 var idxMem = { at: 0, tables: null };
 function readIndex(){
   if (idxMem.tables && (Date.now() - idxMem.at) < 4000) return Promise.resolve(idxMem.tables);
-  return readGist(INDEX_ID, 0).then(function(idx){
+  return readData('index.json', 0).then(function(idx){
     if (idx && idx.__err) return idx;
     idxMem = { at: Date.now(), tables: (idx && idx.tables) || {} };
     return idxMem.tables;
@@ -160,24 +218,22 @@ function ensureRoom(table){
   return readIndex().then(function(tables){
     if (tables && tables.__err) return tables;
     var e = tables[table];
-    if (e && e.g) return e.g;
-    /* 新桌：建一个私密 Gist，再登记进索引 */
-    return gh('POST', '/gists', {
-      description: 'cameo-party ' + table, public: false,
-      files: { 'room.json': { content: JSON.stringify({ table: table, members: [], game: null, records: {}, createdAt: Date.now(), updatedAt: Date.now() }) } }
+    if (e && e.p) return e.p;
+    /* 新桌：先建状态文件（PUT 无 sha = 创建；已存在会 422，无妨），再登记进索引 */
+    return ghRaw('PUT', '/repos/' + DATA_REPO + '/contents/' + roomPath(table), {
+      message: 'room ' + table + ' init',
+      content: utf8ToB64(JSON.stringify({ table: table, members: [], game: null, records: {}, createdAt: Date.now(), updatedAt: Date.now(), rev: 0 }))
     }).then(function(res){
-      if (res && res.__err) return res;
-      var gid = res.id;
-      return rmw(INDEX_ID, 'index.json', function(idx){
+      if (res && res.__err && res.__err404) return res;
+      return rmw('index.json', null, function(idx){
         idx.tables = idx.tables || {};
-        if (idx.tables[table] && idx.tables[table].g) return { obj: idx };   /* 别人先建了，用他的 */
-        idx.tables[table] = { g: gid, at: Date.now() };
+        if (idx.tables[table] && idx.tables[table].p) return { obj: idx, out: null };   /* 别人先建了，用他的 */
+        idx.tables[table] = { p: roomPath(table), at: Date.now() };
         return { obj: idx, out: null };
       }).then(function(r){
         if (r && r.__err) return r;
         idxMem = { at: Date.now(), tables: null };   /* 失效缓存 */
-        var final = (r.ok && tables[table] && tables[table].g) ? tables[table].g : gid;
-        return readIndex().then(function(t2){ return (t2[table] && t2[table].g) || gid; });
+        return readIndex().then(function(t2){ return (t2[table] && t2[table].p) || roomPath(table); });
       });
     });
   });
@@ -466,8 +522,8 @@ function findRoom(table){
   return readIndex().then(function(tables){
     if (tables && tables.__err) return tables;
     var e = tables[table];
-    if (!e || !e.g) return null;
-    return readGist(e.g, 0);
+    if (!e || !e.p) return null;
+    return readData(e.p, 0);
   });
 }
 
@@ -479,9 +535,9 @@ var GPApi = {
     var uid = String(b.uid || '').slice(0, 40);
     if (!table) return Promise.resolve({ ok:false, msg:'缺少桌号，请从桌上二维码进入' });
     if (!name) return Promise.resolve({ ok:false, msg:'缺少微信昵称（需先微信登录）' });
-    return ensureRoom(table).then(function(gid){
-      if (gid && gid.__err) return { ok:false, msg: gid.__err };
-      return rmw(gid, 'room.json', function(room){
+    return ensureRoom(table).then(function(rpath){
+      if (rpath && rpath.__err) return { ok:false, msg: rpath.__err };
+      return rmw(rpath, null, function(room){
         if (!room.table) room.table = table;
         room.updatedAt = Date.now();
         partyPrune(room, null);
@@ -507,15 +563,15 @@ var GPApi = {
     return readIndex().then(function(tables){
       if (tables && tables.__err) return { ok:false, gone:true, msg: tables.__err };
       var e = tables[table];
-      if (!e || !e.g) return { ok:false, gone:true, msg:'派对不存在或已解散' };
-      return readGist(e.g, 0).then(function(room){
+      if (!e || !e.p) return { ok:false, gone:true, msg:'派对不存在或已解散' };
+      return readData(e.p, 0).then(function(room){
         if (room && room.__err) return { ok:false, gone:true, msg: room.__err };
         if (!room || !room.members) return { ok:false, gone:true, msg:'派对不存在或已解散' };
         var self = partyMember(room, pid);
         if (!self) return { ok:false, gone:true, msg:'你已不在派对中' };
         /* 心跳：每 45s 落一次笔（顺带清理掉线成员），其余轮询纯读 */
         if (Date.now() - (self.lastSeen || 0) > BEAT_MS || Date.now() - (room.updatedAt || 0) > STALE_MS + 5000){
-          rmw(e.g, 'room.json', function(r2){
+          rmw(e.p, null, function(r2){
             if (!r2.members) return { obj: r2, out: null };
             r2.updatedAt = Date.now();
             partyPrune(r2, pid);
@@ -538,8 +594,8 @@ var GPApi = {
     return readIndex().then(function(tables){
       if (tables && tables.__err) return { ok:false, gone:true, msg: tables.__err };
       var e = tables[table];
-      if (!e || !e.g) return { ok:false, gone:true, msg:'派对不存在或已解散' };
-      return rmw(e.g, 'room.json', function(room){
+      if (!e || !e.p) return { ok:false, gone:true, msg:'派对不存在或已解散' };
+      return rmw(e.p, null, function(room){
         if (!room || !room.members || !room.members.length) return { err: '@@gone' };
         room.updatedAt = Date.now();
         var me = partyMember(room, b.pid);
@@ -562,8 +618,8 @@ var GPApi = {
     return readIndex().then(function(tables){
       if (tables && tables.__err) return { ok: true };
       var e = tables[table];
-      if (!e || !e.g) return { ok: true };
-      return rmw(e.g, 'room.json', function(r2){
+      if (!e || !e.p) return { ok: true };
+      return rmw(e.p, null, function(r2){
         var me = partyMember(r2, b.pid);
         if (me){
           var idx = r2.members.indexOf(me);
@@ -582,12 +638,12 @@ var GPApi = {
     return readIndex().then(function(tables){
       if (tables && tables.__err) return { ok:false, msg: tables.__err };
       var e = tables[table];
-      if (!e || !e.g) return { ok:false, gone:true, msg:'派对不存在或已解散' };
-      return readGist(e.g, 900).then(function(room){
+      if (!e || !e.p) return { ok:false, gone:true, msg:'派对不存在或已解散' };
+      return readData(e.p, 900).then(function(room){
         if (room && room.__err) return { ok:false, msg: room.__err };
         var me = room && partyMember(room, b.pid);
         if (!me) return { ok:false, gone:true, msg:'你已不在派对中' };
-        return rmw(e.g, 'room.json', function(r2){
+        return rmw(e.p, null, function(r2){
           var me2 = partyMember(r2, b.pid);
           if (!me2 || !me2.isHost) return { err: '只有房主可以踢人' };
           var t = partyMember(r2, String(b.target || ''));
@@ -605,7 +661,7 @@ var GPApi = {
   },
 
   /* 诊断信息（控制台用） */
-  dbg: function(){ return { rateLeft: rateLeft, tables: idxMem.tables }; }
+  dbg: function(){ return { rateLeft: rateLeft, tables: idxMem.tables, repo: DATA_REPO }; }
 };
 
 var root = (typeof window !== 'undefined') ? window : globalThis;
