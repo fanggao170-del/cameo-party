@@ -119,9 +119,9 @@ function rmw(id, fname, mutator, tries){
       if (m.err !== undefined) return { ok: false, msg: m.err, __noWrite: true };
       var nextObj = m.obj;
       if (nextObj !== null){ nextObj.rev = ((cur && cur.rev) || 0) + 1; }
-      /* 写冷却：距本桌上一笔写不足 1.2s 就等一等（抖动错开多端） */
+      /* 写冷却：距本桌上一笔写不足 1s 就等一等（抖动错开多端；GitHub 并发 PATCH 底线 ≥1s） */
       var wait = 0;
-      if (lastWrite[id]){ wait = Math.max(0, 1200 - (Date.now() - lastWrite[id])) + Math.floor(Math.random() * 250); }
+      if (lastWrite[id]){ wait = Math.max(0, 1000 - (Date.now() - lastWrite[id])) + Math.floor(Math.random() * 180); }
       var p = wait > 0 ? sleep(wait) : Promise.resolve();
       return p.then(function(){
         return writeGist(id, fname, nextObj).then(function(w){
