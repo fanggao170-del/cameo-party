@@ -1267,7 +1267,9 @@ $('friendClose').addEventListener('click', function(){ $('friendMask').classList
  * 不绑定微信进不了派对，自然无法记录。 */
 var PT = { table:null, pid:null, members:[], game:null, records:{}, timer:null, failN:0,
   lastRolls:null, selfActT:0, qTable:null, opening:false,
-  myRolls:null, cupOpen:false, shakeBusy:false, rollSeq:0, paintedKey:null, animKey:null };
+  myRolls:null, cupOpen:false, shakeBusy:false, rollSeq:0, paintedKey:null, animKey:null,
+  flipBusy:false, spinH:null, shakeAnimDone:false, shakeRollsIn:false, shakeFailMsg:null,
+  gameEpoch:0, bombRK:null };
 /* 门店网络模式：'store' = 店内 WiFi（可点歌 + 同桌联机） / 'solo' = 手机流量（只能单人玩）
    null = 还没判定完（先按联机处理，判定为 solo 后再收回） */
 var NET_MODE = null;
@@ -1331,6 +1333,8 @@ function ptClear(msg){
   if (PT.timer){ clearInterval(PT.timer); PT.timer = null; }
   PT.pid = null; PT.table = null; PT.members = []; PT.game = null; PT.records = {};
   PT.myRolls = null; PT.cupOpen = false; PT.shakeBusy = false; PT.rollSeq = 0; PT.paintedKey = null; PT.animKey = null;
+  PT.flipBusy = false; PT.spinH = null; PT.shakeAnimDone = false; PT.shakeRollsIn = false; PT.shakeFailMsg = null;
+  PT.gameEpoch = 0; PT.bombRK = null;
   ptSave(); paintPartyBar();
   if (msg) toast(msg);
   var scr = document.querySelector('.screen.on');
@@ -1487,6 +1491,7 @@ function partyTurnHtml(g){
 function ptApplyGame(prev, g){
   var scrEl = document.querySelector('.screen.on');
   var scr = scrEl ? scrEl.id : '';
+  if (!prev !== !g || (prev && g && prev.type !== g.type)){ PT.gameEpoch = (PT.gameEpoch || 0) + 1; }   /* 换游戏实例 → 界面纪元 +1 */
   var gType = g ? g.type : null;
   if (scr === 'bomb') paintBombSync();
   else if (scr === 'wheel') paintWheelSync();
@@ -1842,6 +1847,16 @@ function paintBombSync(){
     }
   }
   var kids = gd.children;
+  /* 新一轮设毒阶段：把上一局残留的翻开/翻转卡全部复原（修复：第二局起一堆卡点不动） */
+  var rk = (PT.gameEpoch || 0) + '_' + (g.round || 1) + '_' + g.phase;
+  if (g.phase === 'set' && PT.bombRK !== rk){
+    PT.bombRK = rk;
+    for (var z = 0; z < kids.length; z++){
+      if (kids[z] === S.bomb.pendingEl) continue;   /* 正在给设毒人看的毒药面不动 */
+      kids[z].classList.remove('flip', 'flipback', 'opened');
+      kids[z].innerHTML = wpFront(z, g.icon);
+    }
+  }
   for (var j = 0; j < kids.length; j++){
     if (kids[j].classList.contains('flip') || kids[j].classList.contains('flipback')) continue;
     var isBoom = g.phase === 'boom' && g.boomedIdx === j;
@@ -1925,13 +1940,24 @@ $('wpGrid').addEventListener('click', function(e){
     }
     if (g.phase === 'guess'){
       if (!g.isMyTurn){ toast('还没轮到你，等 ' + (g.turnName || '别人')); return }
+      /* 上一张还在等云端确认 → 不放行下一张（修复：连点把翻牌请求积压，全部翻完才弹中毒） */
+      if (PT.flipBusy) return;
       if (g.clicked.indexOf(i) >= 0) return;
       if (b.classList.contains('flip') || b.classList.contains('flipback')) return;
       playFlip();
+      PT.flipBusy = true;
       wpFlipTo(b, WP_BACK_OK);
       ptAct({ act:'flip', index:i }, function(j){
+        PT.flipBusy = false;
         if (!j.ok){ toast(j.msg || '操作失败'); wpFlipCardBack(b); return }
-        if (j.boom){ b.innerHTML = WP_BACK_POISON; b.classList.add('opened'); }
+        if (j.boom){
+          b.innerHTML = WP_BACK_POISON; b.classList.add('opened');
+          /* 不等 2.5s 轮询：谁翻到毒药谁中毒，立刻切中毒结算画面 */
+          PT.game.phase = 'boom';
+          PT.game.boomedIdx = i;
+          PT.game.boomedPid = PT.pid;
+          paintBombSync();
+        }
       });
       return;
     }
@@ -2082,20 +2108,22 @@ function spinEase(t){
 }
 /* 通用旋转驱动：rAF + 看门狗（不跳帧时用 16ms 定时器） */
 function runSpin(el, start, delta, T, done){
-  var t0 = null, iv = null, doneFlag = false, rafTicks = 0;
+  var t0 = null, iv = null, doneFlag = false, rafTicks = 0, cur = start;
   function apply(t){
-    var ang = start + delta * spinEase(t);
-    el.style.transform = 'rotate(' + ang + 'deg)';
-    sfxWheelTick(ang);   /* 老虎机逐格咔哒，与转盘角度严格同步 */
+    cur = start + delta * spinEase(t);
+    el.style.transform = 'rotate(' + cur + 'deg)';
+    sfxWheelTick(cur);   /* 老虎机逐格咔哒，与转盘角度严格同步 */
   }
   function finish(){ if (doneFlag) return; doneFlag = true; if (iv){ clearInterval(iv); iv = null; } done(); }
   function byTimer(){
+    if (doneFlag) return;
     if (t0 === null) t0 = performance.now();
     var t = Math.min(1, (performance.now() - t0) / T);
     apply(t);
     if (t >= 1) finish();
   }
   function byRaf(ts){
+    if (doneFlag) return;
     rafTicks++;
     if (t0 === null) t0 = ts;
     var t = Math.min(1, (ts - t0) / T);
@@ -2107,6 +2135,11 @@ function runSpin(el, start, delta, T, done){
   setTimeout(function(){
     if (!doneFlag && rafTicks < 5){ if (iv) clearInterval(iv); iv = setInterval(byTimer, 16); }
   }, 400);
+  /* 中途停转支持：party 模式「先起转、结果到了再无缝接到目标」用 */
+  return {
+    cur: function(){ return cur; },
+    cancel: function(){ if (doneFlag) return; doneFlag = true; if (iv){ clearInterval(iv); iv = null; } }
+  };
 }
 function buildWheel(){
   var n = WSEG.length, step = 360 / n;
@@ -2225,12 +2258,44 @@ function spinWheel(){
     }
     if (!pg.isMyTurn){ toast('还没轮到你，等 ' + (pg.turnName || '') + ' 转'); return; }
     sfxSlotLever();
+    /* 点击立即起转（惯性段），云端结果回来后从当前角度无缝接到目标扇区 */
+    wheelBusy = true;
+    PT.spinH = runSpin($('wheelEl'), wheelAngle, 1080, 3400, function(){});
     ptAct({ act:'spin' }, function(j){
-      if (!j.ok){ toast(j.msg || '转盘失败'); return }
+      if (!j.ok){
+        if (PT.spinH){
+          var cBad = PT.spinH.cur();
+          PT.spinH.cancel(); PT.spinH = null;
+          wheelAngle = cBad;
+          $('wheelEl').style.transform = 'rotate(' + cBad + 'deg)';
+        }
+        wheelBusy = false;
+        toast(j.msg || '转盘失败');
+        return;
+      }
       PT.game.actionIdx = j.actionIdx; PT.game.seq = j.seq;
       PT.game.phase = j.phase || 'result';
       PT.animKey = 'w' + j.seq;   /* 自己已播，轮询别再播 */
-      animateWheelTo(j.actionIdx, 4200, function(){ paintWheelSync(); });
+      var spliced = false, c2 = wheelAngle;
+      if (PT.spinH){
+        c2 = PT.spinH.cur();
+        PT.spinH.cancel(); PT.spinH = null;
+        wheelAngle = c2;
+        spliced = true;
+      }
+      if (spliced){
+        var na = WSEG.length;
+        var delta = wheelTargetDelta(c2, na, j.actionIdx, 6);
+        runSpin($('wheelEl'), c2, delta, 3000, function(){
+          wheelAngle = c2 + delta;
+          wheelBusy = false;
+          $('wheelCap').textContent = WSEG[j.actionIdx] ? WSEG[j.actionIdx].t : '';
+          sfxSlotStop();   /* 落定：棘轮刹停 + 中奖叮当 */
+          paintWheelSync();
+        });
+      } else {
+        animateWheelTo(j.actionIdx, 4200, function(){ paintWheelSync(); });
+      }
     });
     return;
   }
@@ -2616,15 +2681,21 @@ $('rollBtn').addEventListener('click', function(){
     var g = PT.game;
     if (g.phase !== 'play' || PT.shakeBusy) return;
     PT.shakeBusy = true;
+    PT.shakeAnimDone = false; PT.shakeRollsIn = false; PT.shakeFailMsg = null;
     $('rollBtn').disabled = true;
+    ptShakeCupStart();          /* 摇盅动画立即开始，不等云端一圈 */
     ptAct({ act:'shake' }, function(j){
-      PT.shakeBusy = false;
-      if (!j.ok){ $('rollBtn').disabled = false; toast(j.msg || '摇骰失败'); return }
+      if (!j.ok){
+        PT.shakeFailMsg = (j.msg || '摇骰失败');
+        if (PT.shakeAnimDone) ptShakeCupSettle();
+        return;
+      }
       PT.game.myRolls = j.rolls;
       PT.myRolls = j.rolls;
       PT.rollSeq = (PT.rollSeq || 0) + 1;
       PT.cupOpen = false;
-      ptShakeCup(j.rolls);
+      PT.shakeRollsIn = true;
+      if (PT.shakeAnimDone) ptShakeCupSettle();   /* 动画已结束 → 立即亮可开盅；否则动画结束时收尾 */
     });
     return;
   }
@@ -2833,9 +2904,9 @@ window.addEventListener('devicemotion', function(e){
   shakeLast = now;
   rb.click();
 });
-/* ===== 派对同步模式：大话骰（各摇各的 · 点数由服务端发，只发本人） ===== */
-/* 自己摇：摇盅动画 → 停下时盅仍扣着 → 玩家自己上滑开盅看数 */
-function ptShakeCup(rolls){
+/* ===== 派对同步模式：大话骰（点数由服务端发，只发本人） ===== */
+/* 动画段：点击立即摇（不等网络）；摇完时若点数未到就先等着，点数一到由 ptShakeCupSettle 收尾 */
+function ptShakeCupStart(){
   var zone = $('cupZone'), cup = $('cup3d'), ds = $('diceLine').children;
   _cupBusyAt = Date.now();
   sfxDiceReal();   /* 真实摇骰原声 */
@@ -2857,17 +2928,33 @@ function ptShakeCup(rolls){
     zone.classList.remove('zoneShake');
     /* 骰面先藏好（扣盅看不见），等开盅再用 dieFace 亮出真点数 */
     for (var k2 = 0; k2 < ds.length; k2++) ds[k2].style.transform = '';
-    PT.myRolls = rolls;
-    PT.cupOpen = false;
-    /* 扣着等开：可以拖了 */
-    cup.classList.add('swipeable');
-    var hint = $('cupHint');
-    hint.textContent = '↑ 上滑开盅';
-    hint.classList.add('on');
-    PT.shakeBusy = false;
-    $('rollBtn').disabled = false;
-    $('rollBtn').textContent = '再摇一次';
+    PT.shakeAnimDone = true;
+    if (PT.shakeRollsIn || PT.shakeFailMsg) ptShakeCupSettle();
   }, 1250);
+}
+/* 收尾段：点数已到（或失败）→ 恢复按钮 / 亮出可开盅状态 */
+function ptShakeCupSettle(){
+  var hint = $('cupHint');
+  if (PT.shakeFailMsg){
+    /* 云端摇骰失败：盅已扣住但无点数 → 提示后恢复可摇 */
+    toast(PT.shakeFailMsg);
+    PT.myRolls = null;
+    if (PT.game) PT.game.myRolls = null;
+    PT.cupOpen = false;
+    PT.shakeBusy = false;
+    PT.shakeFailMsg = null;
+    $('rollBtn').disabled = false;
+    $('rollBtn').textContent = '摇';
+    return;
+  }
+  PT.cupOpen = false;
+  /* 扣着等开：可以拖了 */
+  $('cup3d').classList.add('swipeable');
+  hint.textContent = '↑ 上滑开盅';
+  hint.classList.add('on');
+  PT.shakeBusy = false;
+  $('rollBtn').disabled = false;
+  $('rollBtn').textContent = '再摇一次';
 }
 /* 派对开盅：升起骰盅 + 亮出服务端发的点数（只发本人） */
 function ptOpenCupUI(){
@@ -3605,6 +3692,8 @@ window.__E = {
   party: function(){ return PT; },
   ptJoin: ptJoin,
   ptAct: ptAct,
+  ptLeave: ptLeave,
+  wheelBusy: function(){ return wheelBusy; },
   ptOpenCup: ptOpenCupUI,
   sfxDbg: function(){
     var out = [];
