@@ -436,7 +436,13 @@
   }
   .cup-hint.on{opacity:1; animation:hintBob 1.1s ease-in-out infinite;}
   @keyframes hintBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-9px)}}
-  .rollrow{flex:none; display:flex; align-items:center; justify-content:center; padding:6px 0 4px;}
+  .rollrow{flex:none; display:flex; align-items:center; justify-content:center; gap:20px; padding:6px 0 4px;}
+  /* 氛围音效小圆钮：摆在「摇」的旁边，点一下直接拉出音效列表 */
+  .amborb{width:58px; height:58px; border-radius:50%; border:4px solid #E8E4DA; cursor:pointer; font-size:25px; line-height:1;
+    background:radial-gradient(circle at 38% 30%, #FFD75E 0%, #F0A93A 58%, #C67C16 100%);
+    box-shadow:0 6px 0 #8A5A08, 0 10px 20px rgba(0,0,0,.5), inset 0 3px 6px rgba(255,255,255,.5);
+    display:flex; align-items:center; justify-content:center; padding:0;}
+  .amborb:active{transform:translateY(3px); box-shadow:0 3px 0 #8A5A08, 0 6px 14px rgba(0,0,0,.5);}
   .rollorb{width:88px; height:88px; border-radius:50%; border:5px solid #E8E4DA; cursor:pointer;
     background:radial-gradient(circle at 38% 30%, #FF7B6B 0%, #E63A2E 55%, #B01E14 100%);
     color:#fff; font-size:31px; font-weight:900; letter-spacing:1px;
@@ -831,7 +837,7 @@
     <div class="scr-top">
       <button class="backbtn" data-back>‹</button>
       <span class="scr-title">🎲 摇骰子</span>
-      <span class="scr-sub"><b id="ambBtn" style="cursor:pointer;">🎉 氛围音效</b><span style="opacity:.45;"> · </span><b id="diceCountBtn" style="cursor:pointer;">🎲 × 5</b></span>
+      <span class="scr-sub"><b id="diceCountBtn" style="cursor:pointer;">🎲 × 5</b></span>
     </div>
     <div class="syncbar" id="diceSync"></div>
     <div class="dice-stage">
@@ -864,6 +870,7 @@
         <div class="cup-hint" id="cupHint">↑ 上滑开盅 · ↓ 下滑盖上</div>
       </div>
       <div class="rollrow">
+        <button class="amborb" id="ambBtn" aria-label="氛围音效">🎉</button>
         <button class="rollorb" id="rollBtn">摇</button>
       </div>
     </div>
@@ -2251,14 +2258,18 @@ $('spinBtn').addEventListener('click', spinWheel);
 /* ================= 摇骰子（真 3D 立方体 · 正常俯视姿态 · 三面点数独立） ================= */
 var PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
 /* 面点阵（54x54，三列均布 13/27/41；蓝点 / 1·4 红点，照参考图配色） */
+/* 点阵 SVG 按点数缓存（摇骰动画每秒要重建几十次面，缓存后开销大幅下降，消除点击/摇动时的卡顿） */
+var PIPS_HTML = {};
 function pipsSvg(v){
+  if (PIPS_HTML[v]) return PIPS_HTML[v];
   var g = [13,27,41], h = '';
   var fill = (v === 1 || v === 4) ? '#D5240E' : '#173CB5';
-  if (v === 1) return '<circle cx="27" cy="27" r="9" fill="' + fill + '"/>';
-  for (var i = 0; i < 9; i++){
+  if (v === 1) h = '<circle cx="27" cy="27" r="9" fill="' + fill + '"/>';
+  else for (var i = 0; i < 9; i++){
     if (PIPS[v].indexOf(i) < 0) continue;
     h += '<circle cx="' + g[i % 3] + '" cy="' + g[(i / 3) | 0] + '" r="5.5" fill="' + fill + '"/>';
   }
+  PIPS_HTML[v] = h;
   return h;
 }
 function dieFace(el, tv0, fv){
@@ -2574,6 +2585,21 @@ $('sfxDone').addEventListener('click', function(){ $('sfxMask').classList.remove
 $('sfxMask').addEventListener('click', function(e){
   if (e.target === this) $('sfxMask').classList.remove('on');
 });
+/* ===== 启动即预加载全部音效（修复：以前从不预载，第一次点「摇」才现场下载 dice.mp3 → 点下去先卡一下） ===== */
+sfxPreload();
+/* 首次触摸就建好/唤醒 AudioContext：第一次点按钮不再有建音频上下文的延迟 */
+(function sfxUnlock(){
+  var unlock = function(){
+    try{
+      _sfxAC = _sfxAC || new (window.AudioContext || window.webkitAudioContext)();
+      if (_sfxAC.state === 'suspended'){ _sfxAC.resume(); }
+    }catch(e){}
+    document.removeEventListener('touchstart', unlock);
+    document.removeEventListener('pointerdown', unlock);
+  };
+  document.addEventListener('touchstart', unlock, { passive:true });
+  document.addEventListener('pointerdown', unlock, { passive:true });
+})();
 
 /* 右上角换骰子数量：3 → 4 → 5 → 6 循环 */
 $('diceCountBtn').addEventListener('click', function(){
@@ -2605,8 +2631,10 @@ $('rollBtn').addEventListener('click', function(){
   /* ===== 派对里但还没点「开局」：不许偷偷进单机摇骰 ===== */
   if (ptSync()){ toast('先点上方「▶ 开局」开始玩'); return; }
   var D = S.dice;
+  if (!D.order.length) paintDice();   /* 修复：整局摇完后 order 为空，再点「摇」曾被 done>=order.length 拦死（第二局点摇没反应） */
   if (D.busy || D.awaitOpen || D.done >= D.order.length){ return; }
   D.busy = true;
+  _cupBusyAt = Date.now();
   sfxDiceReal();   /* 真实摇骰原声 */
   var zone = $('cupZone'), cup = $('cup3d'), ds = $('diceLine').children;
   var rolls = [];
@@ -2637,6 +2665,7 @@ $('rollBtn').addEventListener('click', function(){
       /* 3. 停在盖上，等玩家拖盅看点数 */
       D.rolls = rolls;
       D.awaitOpen = true;
+      _cupBusyAt = Date.now();   /* 摇盅刚停：上滑开盅的动作不应触发摇一摇 */
       D.busy = false;
       cup.classList.add('swipeable');
       $('cupHint').classList.add('on');
@@ -2647,6 +2676,7 @@ $('rollBtn').addEventListener('click', function(){
 /* 骰盅跟手拖拽：上滑开盅 · 下滑盖上 · 手指停滑动停（单机/派对通用） */
 var CUP_TRAVEL = 144;
 var cupDrag = null; /* {y0, frac0} */
+var _cupBusyAt = 0; /* 最近一次摇盅/拖盅/开盅的时间戳：摇一摇防误触静默窗口 */
 function ptCupWait(){   /* 派对模式：盅扣着且有自己的点数 → 可以开 */
   return ptSync() && PT.game && PT.game.type === 'dice' && PT.myRolls && !PT.cupOpen;
 }
@@ -2657,6 +2687,7 @@ function cupFrac(){
 function cupDown(ev){
   if (S.dice.busy || PT.shakeBusy) return;
   if (ptSync() && !ptCupWait()) return;   /* 派对模式：只有扣着且摇过才能拖开（开盅后点「再摇」即可） */
+  _cupBusyAt = Date.now();
   var cup = $('cup3d');
   try{ if (window.PointerEvent && ev.pointerId != null && cup.setPointerCapture){ cup.setPointerCapture(ev.pointerId); } }catch(e){}
   cupDrag = { y0: ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY, frac0: cupFrac() };
@@ -2683,6 +2714,7 @@ function cupMove(ev){
 }
 function cupEnd(ev){
   if (!cupDrag) return;
+  _cupBusyAt = Date.now();
   var cup = $('cup3d');
   try{ if (window.PointerEvent && ev && ev.pointerId != null && cup.releasePointerCapture){ cup.releasePointerCapture(ev.pointerId); } }catch(e){}
   var frac = cupDrag.frac != null ? cupDrag.frac : cupDrag.frac0;
@@ -2732,6 +2764,7 @@ function openCup(){
   setTimeout(function(){ settleDice(D); }, 1000);
 }
 function settleDice(D){
+  _cupBusyAt = Date.now();   /* 开盅结算瞬间起 1.1 秒内忽略摇一摇（防上滑动作误触发重摇） */
   /* 正面点数求和，最小的人喝 */
   var ds = $('diceLine').children;
   var sum = 0;
@@ -2765,8 +2798,12 @@ function showDiceRes(who, min){
   showDiceRes._h = setTimeout(function(){ el.classList.remove('on'); }, 2800);
 }
 
-/* ===== 摇一摇手机摇骰（iOS 13+ 需要授权：第一次点「摇」时顺带申请） ===== */
-var shakeLast = 0, shakeMag = 0;
+/* ===== 摇一摇手机摇骰（iOS 13+ 需要授权：第一次点「摇」时顺带申请） =====
+   防误触三重门（修复 bug：上滑开盅的动作被加速度计误判成摇一摇 → 刚亮出的骰子又变）：
+   ① 拖盅期间 / 摇盅·开盅·结算后 1.1 秒内一律忽略（_cupBusyAt 时间戳）
+   ② 单次尖峰不触发，700ms 内连续 2 次尖峰才算「在摇」（滑动/点按只有单尖峰）
+   ③ 阈值 16→22，且保持 1.2 秒冷却 */
+var shakeLast = 0, shakeMag = 0, shakePeaks = 0;
 function shakePerm(){
   try{
     if (typeof DeviceMotionEvent !== 'undefined' &&
@@ -2783,11 +2820,16 @@ window.addEventListener('devicemotion', function(e){
   var mag = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
   var delta = Math.abs(mag - (shakeMag || 0));   /* 幅度突变 = 在晃 */
   shakeMag = mag;
-  if (now - shakeLast < 1200 || delta < 16) return;
+  if (now - shakeLast < 1200 || delta < 22) return;
+  if (cupDrag) return;                                    /* ① 正在拖盅：滑动不是摇 */
+  if (now - (_cupBusyAt || 0) < 1100) return;             /* ① 摇盅/开盅/结算后短暂静默 */
   var d = $('dice');
   if (!d || !d.classList.contains('on')) return; /* 只在摇骰子页生效 */
   var rb = $('rollBtn');
   if (!rb || rb.disabled) return;
+  /* ② 连续 2 次尖峰（700ms 内）才认定为「摇一摇」，单尖峰多为滑动/点按 */
+  if (!shakePeaks || now - shakePeaks > 700){ shakePeaks = now; return; }
+  shakePeaks = 0;
   shakeLast = now;
   rb.click();
 });
@@ -2795,6 +2837,7 @@ window.addEventListener('devicemotion', function(e){
 /* 自己摇：摇盅动画 → 停下时盅仍扣着 → 玩家自己上滑开盅看数 */
 function ptShakeCup(rolls){
   var zone = $('cupZone'), cup = $('cup3d'), ds = $('diceLine').children;
+  _cupBusyAt = Date.now();
   sfxDiceReal();   /* 真实摇骰原声 */
   cup.style.transition = 'none'; cup.classList.add('down');
   void cup.offsetWidth; cup.style.transition = '';
@@ -2810,6 +2853,7 @@ function ptShakeCup(rolls){
   }, 80);
   setTimeout(function(){
     clearInterval(iv);
+    _cupBusyAt = Date.now();
     zone.classList.remove('zoneShake');
     /* 骰面先藏好（扣盅看不见），等开盅再用 dieFace 亮出真点数 */
     for (var k2 = 0; k2 < ds.length; k2++) ds[k2].style.transform = '';
@@ -2829,6 +2873,7 @@ function ptShakeCup(rolls){
 function ptOpenCupUI(){
   if (PT.cupOpen || !PT.myRolls) return;
   PT.cupOpen = true;
+  _cupBusyAt = Date.now();
   var cup = $('cup3d'), ds = $('diceLine').children;
   $('cupHint').classList.remove('on');
   cup.classList.remove('swipeable');
