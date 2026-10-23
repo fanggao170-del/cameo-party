@@ -1889,6 +1889,7 @@ function wpFlipCardBack(b){
 $('wpOkBtn').addEventListener('click', function(){
   $('wpConfirmMask').classList.remove('on');
   var b = S.bomb.pendingEl;
+  if (S.bomb.pending < 0 || !b) return;   /* 没有确认中的卡牌：忽略误触（防空指针崩溃） */
   /* ===== 派对同步：毒药位置只交给服务端，谁也不知道在哪儿 ===== */
   if (ptSync() && PT.game && PT.game.type === 'bomb' && PT.game.phase === 'set'){
     var pidx = S.bomb.pending;
@@ -1911,6 +1912,7 @@ $('wpOkBtn').addEventListener('click', function(){
 });
 $('wpCancelBtn').addEventListener('click', function(){
   $('wpConfirmMask').classList.remove('on');
+  if (S.bomb.pending < 0 || !S.bomb.pendingEl) return;   /* 没有确认中的卡牌：忽略误触 */
   wpFlipCardBack(S.bomb.pendingEl);
   S.bomb.pending = -1; S.bomb.pendingEl = null;
 });
