@@ -78,10 +78,16 @@
     opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:99;
   }
   .toastbox.on{opacity:1; transform:translateX(-50%) translateY(0);}
+  .langbtn{
+    border:1.5px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#F5EFE6;
+    border-radius:999px; cursor:pointer; font-weight:900; letter-spacing:1px; font-family:inherit;
+  }
+  .langbtn:active{transform:scale(.94);}
 </style>
 </head>
 <body>
   <div class="logo">C A M E O <b>·</b> 酒 令 派 对</div>
+  <button class="langbtn" type="button" aria-label="Switch language" style="position:fixed;top:14px;right:14px;width:44px;height:30px;font-size:13px;">EN</button>
   <h1>开一局？</h1>
   <p class="sub">云端 7×24 在线 · 电脑关机也能玩</p>
   <div class="tablebadge" id="tb" style="display:none;"><em style="font-style:normal;">—</em> 号桌</div>
@@ -114,13 +120,14 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024i·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024j·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
   <div class="toastbox" id="toast"></div>
   <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
 
+<script src="i18n.js?v=1024j"></script>
 <script>
 (function () {
   var tb = document.getElementById('tb');
