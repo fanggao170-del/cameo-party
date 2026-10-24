@@ -764,6 +764,7 @@
       <div class="wp-btnrow">
         <button class="btn gold wp-btn-main" id="wpIconBtn">🎨 设置图标</button>
         <button class="btn cyan wp-btn-sub" id="wpSizeBtn">🔢 数量</button>
+        <button class="btn cyan wp-btn-sub" id="bombRestartBtn" style="display:none;">↻ 重新开始</button>
       </div>
     </div>
     <div class="boomwrap" id="boomWrap">
@@ -1355,7 +1356,7 @@ function ptClear(msg){
   ptSave(); paintPartyBar();
   if (msg) toast(msg);
   var scr = document.querySelector('.screen.on');
-  if (scr && scr.id === 'bomb'){ bombReset(true); $('bombSync').style.display = 'none'; $('wpIconBtn').style.display = ''; $('wpSizeBtn').style.display = ''; }
+  if (scr && scr.id === 'bomb'){ bombReset(true); $('bombSync').style.display = 'none'; $('wpIconBtn').style.display = ''; $('wpSizeBtn').style.display = ''; $('bombRestartBtn').style.display = 'none'; }
   if (scr && scr.id === 'wheel'){ buildWheel(); $('wheelSync').style.display = 'none'; }
   if (scr && scr.id === 'dice'){ paintDice(); $('diceSync').style.display = 'none'; $('diceCountBtn').style.pointerEvents = ''; $('diceCountBtn').style.opacity = ''; }
   if (scr && scr.id === 'spy'){ $('spySync').style.display = 'none'; spyEnter(); }
@@ -1584,7 +1585,7 @@ function showScreen(id){
   updateStartGate();
   if (id === 'bomb'){
     if (ptSync()) paintBombSync();
-    else { $('bombSync').style.display = 'none'; $('wpIconBtn').style.display = ''; $('wpSizeBtn').style.display = ''; paintBomb(); }
+    else { $('bombSync').style.display = 'none'; $('wpIconBtn').style.display = ''; $('wpSizeBtn').style.display = ''; $('bombRestartBtn').style.display = 'none'; paintBomb(); }
   }
   if (id === 'wheel'){
     buildWheel();
@@ -1890,6 +1891,10 @@ function paintBombSync(){
   }
   $('wpIconBtn').style.display = 'none';
   $('wpSizeBtn').style.display = 'none';
+  /* 房主专属：重新开始（回到第 1 轮全新一盘） */
+  var imHost = false;
+  for (var mh = 0; mh < PT.members.length; mh++){ if (PT.members[mh].isHost && PT.members[mh].me) imHost = true; }
+  $('bombRestartBtn').style.display = imHost ? '' : 'none';
   var gd = $('wpGrid');
   if (gd.children.length !== g.size || gd.getAttribute('data-built') !== 'P_' + g.icon + '_' + g.size){
     gd.setAttribute('data-built', 'P_' + g.icon + '_' + g.size);
@@ -1949,6 +1954,16 @@ function wpFlipCardBack(b){
   var bb = b;
   setTimeout(function(){ bb.classList.remove('flipback'); }, 580);
 }
+$('bombRestartBtn').addEventListener('click', function(){
+  if (!ptSync()) return;   /* 仅派对模式（单机按钮不显示） */
+  var btn = this;
+  btn.disabled = true;
+  ptAct({ act:'brestart' }, function(j){
+    btn.disabled = false;
+    if (!j.ok){ toast(j.msg || '重新开始失败，请再点一次'); return }
+    toast('已重新开始 · 第 1 轮');
+  });
+});
 $('wpOkBtn').addEventListener('click', function(){
   $('wpConfirmMask').classList.remove('on');
   var b = S.bomb.pendingEl;
