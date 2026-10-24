@@ -142,18 +142,31 @@
     var lm = document.getElementById('lanManual');
     lm.href = LAN_URL + '/' + carry;
     lm.style.display = 'block';
-    /* 探测局域网服务可达性（Image 不受 CORS 限制；被浏览器拦就当不可达，安静降级） */
+    /* 探测店里服务可达性：双保险。
+       【修复】原来用 Image 探测 /api/ping —— 返回 JSON 不是图片，永远 onerror，极速版入口从来不亮！
+       现在：① fetch no-cors（网络通即 resolve）② Image 探测真实图片 ping.png（部分 WebView 拦 fetch 不拦图片）。
+       任一成功 = 在店里 → 自动切极速版（旧桌卡指向 GitHub 也不用重印） */
     var probed = false;
-    var img = new Image();
-    var timer = setTimeout(function () { img.src = ''; }, 2500);
-    img.onload = function () {
-      if (probed) return; probed = true; clearTimeout(timer);
+    var goLan = function () {
+      if (probed) return; probed = true;
       var bar = document.getElementById('lanbar');
       bar.style.display = 'block';
-      bar.onclick = function () { location.href = LAN_URL + '/' + carry; };
+      bar.querySelector('.t1').textContent = '⚡ 已连上店里 WiFi · 正在切换极速版…';
+      bar.querySelector('.t2').textContent = '桌号自动带上，马上就好';
+      setTimeout(function () { location.replace(LAN_URL + '/' + carry); }, 450);
     };
-    img.onerror = function () { clearTimeout(timer); };
-    img.src = LAN_URL + '/api/ping?t=' + Date.now();
+    var probe = function () {
+      try { fetch(LAN_URL + '/api/ping?t=' + Date.now(), { mode: 'no-cors', cache: 'no-store' }).then(goLan).catch(function () {}); } catch (e) {}
+      try {
+        var img = new Image();
+        img.onload = goLan;
+        img.src = LAN_URL + '/ping.png?t=' + Date.now();
+      } catch (e) {}
+      setTimeout(function () {
+        if (!probed){ probed = true; document.getElementById('lanbar').style.display = 'none'; }   /* 不在店里：收起 */
+      }, 3000);
+    };
+    probe();
   }
 
   btnParty.onclick = function () {
