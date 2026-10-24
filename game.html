@@ -22,18 +22,6 @@
     display:flex; flex-direction:column;
   }
   .screen{position:absolute; inset:0; display:none; flex-direction:column; padding:18px 18px 22px; overflow:hidden;}
-  /* 矮屏适配：收紧内边距与标题，保证各游戏主按钮不被挤出屏幕 */
-  @media (max-height:700px){
-    .screen{padding:10px 12px 12px;}
-    .scr-top{margin-bottom:8px;}
-    .scr-title{font-size:19px;}
-    .cupzone{height:clamp(280px, calc(100dvh - 330px), 360px);}
-    .cup3d{width:246px; height:227px; margin-left:-123px; bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 227px);}
-    .cup-hint{bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 134px);}
-    .rollorb{height:72px; font-size:25px; padding:0 26px;}
-    .amborb{width:72px; height:72px; font-size:28px;}
-    .spy-big{height:50px; font-size:19px;}
-  }
   .screen.on{display:flex;}
   .scr-top{flex:none; display:flex; align-items:center; gap:10px; margin-bottom:14px;}
   .backbtn{
@@ -152,13 +140,6 @@
   .mode.spym .m-name{color:#FFB3D9;} .mode.spym{border-color:rgba(255,120,190,.42);}
   .mode.danmaku .m-name{color:#E8B4FF;} .mode.danmaku{border-color:rgba(190,120,255,.4);}
   .mode.strobe .m-name{color:#BFF3FF;} .mode.strobe{border-color:rgba(120,220,255,.4);}
-  /* 扫码点歌：整行横条卡 */
-  .mode.wide{grid-column:1 / -1; flex-direction:row; align-items:center; gap:13px; min-height:64px; padding:11px 15px;}
-  .mode.wide .m-ico{position:static; font-size:30px; flex:none;}
-  .mode.wide .mtxt{flex:1; min-width:0;}
-  .mode.wide .m-name{padding-right:0;}
-  .mode.wide .song-arrow{flex:none; font-size:22px; font-weight:900; color:rgba(255,255,255,.35);}
-  .mode.songm .m-name{color:#FFE08A;} .mode.songm{border-color:rgba(255,215,94,.42);}
   .footrow{flex:none; display:flex; align-items:center; gap:8px; margin-top:10px;}
   .theme-toggle{
     flex:1; height:38px; border-radius:13px; border:1.5px solid rgba(255,255,255,.16);
@@ -452,7 +433,9 @@
     position:absolute; left:50%; bottom:calc(clamp(330px, calc(100dvh - 360px), 420px) - 268px); width:290px; height:268px; margin-left:-145px; z-index:6;
     pointer-events:none; transition:transform 1s cubic-bezier(.3,.85,.35,1);
   }
-  .cup3d.down{transform:translateY(144px);}
+  /* 盅「盖上」的下落距离随 zone 高度自适应：H-276 = H(盅高268) - 8px 离底间隙；
+     写死 144 会在矮屏（zone 收缩后）把盅直接戳出容器、压住下面的按钮（真机已复现） */
+  .cup3d.down{transform:translateY(calc(clamp(330px, calc(100dvh - 360px), 420px) - 276px));}
   .cup3d.swipeable{pointer-events:auto; touch-action:none; cursor:grab;}
   .cup3d svg{width:100%; height:100%; display:block; filter:drop-shadow(0 18px 28px rgba(0,0,0,.55));}
   .cup-hint{
@@ -700,6 +683,23 @@
   .prec-row b{font-size:17px; font-weight:900; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .prec-row .pv{margin-left:auto; flex:none; text-align:right; font-size:14px; color:#B9A8D8; font-weight:800; line-height:1.5;}
   .prec-row .pv b{font-size:17px; color:#FFD75E;}
+  /* 矮屏适配（手机带地址栏视口 ≤700px）。
+     【必须放在样式表末尾】同优先级规则后者胜 —— 之前写在开头被后面的基础规则覆盖，
+     缩小尺寸全部失效，盅的下落位移仍按大屏算，直接戳出容器压住「摇骰子」按钮 */
+  @media (max-height:700px){
+    .screen{padding:10px 12px 12px;}
+    .scr-top{margin-bottom:8px;}
+    .scr-title{font-size:19px;}
+    .cupzone{height:clamp(280px, calc(100dvh - 330px), 360px);}
+    .cup3d{width:246px; height:227px; margin-left:-123px; bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 227px);}
+    /* 盅缩小到 246px 后，骰子散布 260px 会从盅边露出来 → 同步收窄 */
+    .diceline{width:224px; margin-left:-112px;}
+    .cup3d.down{transform:translateY(calc(clamp(280px, calc(100dvh - 330px), 360px) - 235px));}
+    .cup-hint{bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 134px);}
+    .rollorb{height:72px; font-size:25px; padding:0 26px;}
+    .amborb{width:72px; height:72px; font-size:28px;}
+    .spy-big{height:50px; font-size:19px;}
+  }
 </style>
 </head>
 <body>
@@ -741,14 +741,6 @@
         <div class="m-ico">🕵️</div>
         <div class="m-name">谁是卧底</div>
         <div class="m-desc">开房组队 · 抓卧底</div>
-      </div>
-      <div class="mode glass wide songm" data-go="song">
-        <div class="m-ico">🎵</div>
-        <div class="mtxt">
-          <div class="m-name">扫码点歌</div>
-          <div class="m-desc">搜歌点播 · 生日祝福 · 大屏秒上屏</div>
-        </div>
-        <div class="song-arrow">›</div>
       </div>
       <div class="mode glass danmaku" data-go="danmaku">
         <div class="m-ico">📣</div>
@@ -1118,9 +1110,9 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="gp.js?v=1024h"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024h</div>
-<script>try{document.getElementById('verBadge').textContent='v1024h·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="gp.js?v=1024i"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024i</div>
+<script>try{document.getElementById('verBadge').textContent='v1024i·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -1658,14 +1650,6 @@ document.querySelectorAll('[data-go]').forEach(function(el){
     if ((id === 'box' || id === 'ach') && !S.me){ openLoginFor(id); return }
     /* 谁是卧底天生多人：手机流量单人模式直接拦下 */
     if (id === 'spy' && NET_MODE === 'solo'){ toast('谁是卧底要 3 人以上联机 · 连店里 WiFi 才能开'); return }
-    /* 扫码点歌：店内局域网 → 跳点歌台（同源 /song，与派对同一个服务）；线上版 → 提示连店 WiFi */
-    if (id === 'song'){
-      var tq = (PT.table || (location.search.match(/[?&]t=([^&]*)/) || [])[1] || '');
-      var qs = tq ? '?t=' + encodeURIComponent(decodeURIComponent(tq)) : '';
-      if (location.protocol === 'http:'){ location.href = '/song' + qs; return }
-      toast('扫码点歌要连店里 WiFi · 扫桌上的二维码进极速版');
-      return;
-    }
     go(id);
   });
 });
@@ -2951,9 +2935,16 @@ $('rollBtn').addEventListener('click', function(){
   }, 300);
 });
 /* 骰盅跟手拖拽：上滑开盅 · 下滑盖上 · 手指停滑动停（单机/派对通用） */
-var CUP_TRAVEL = 144;
-var cupDrag = null; /* {y0, frac0} */
+var cupDrag = null; /* {y0, frac0, travel} */
 var _cupBusyAt = 0; /* 最近一次摇盅/拖盅/开盅的时间戳：摇一摇防误触静默窗口 */
+function cupTravel(){   /* 盅上/下两态的位移 = zone高 - 盅高 - 8px 离底间隙（与 .cup3d.down 的 calc 一致） */
+  var zone = document.getElementById('cupZone');
+  var cup = document.getElementById('cup3d');
+  if (!zone || !cup) return 144;
+  var h = zone.getBoundingClientRect().height;
+  var ch = cup.getBoundingClientRect().height;
+  return Math.max(60, h - ch - 8);
+}
 function ptCupWait(){   /* 派对模式：盅扣着且有自己的点数 → 可以开 */
   return ptSync() && PT.game && PT.game.type === 'dice' && PT.myRolls && !PT.cupOpen;
 }
@@ -2977,16 +2968,17 @@ function cupDown(ev){
       dieFace(ds0[i0], PT.myRolls[i0], PT.myRolls[i0]);
     }
   }
-  cupDrag = { y0: ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY, frac0: cupFrac() };
+  cupDrag = { y0: ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY, frac0: cupFrac(), travel: cupTravel() };
   cup.style.transition = 'none';
   ev.preventDefault();
 }
 function cupMove(ev){
   if (!cupDrag) return;
   var y = ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY;
-  var frac = Math.max(0, Math.min(1, cupDrag.frac0 + (cupDrag.y0 - y) / CUP_TRAVEL));
+  var T = cupDrag.travel || 144;
+  var frac = Math.max(0, Math.min(1, cupDrag.frac0 + (cupDrag.y0 - y) / T));
   cupDrag.frac = frac;
-  $('cup3d').style.transform = 'translateY(' + (144 * (1 - frac)).toFixed(1) + 'px)';
+  $('cup3d').style.transform = 'translateY(' + (T * (1 - frac)).toFixed(1) + 'px)';
   if (ev.cancelable) ev.preventDefault();
   /* 手指按住期间盅全程跟手（用户明确要求）：不在中途断手势/自动开盅，松手才定开盖 */
 }
