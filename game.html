@@ -575,6 +575,13 @@
     font-size:22px; background:rgba(255,255,255,.12);}
   .friend-row b{font-size:18px; font-weight:900;}
   .friend-row span{font-size:14px; color:#8E7CB0; font-weight:700; margin-top:1px;}
+  /* 开局门禁遮罩：派对里未开局时挡住游戏画面，明确引导「先点开局」（z 80 < toast 90） */
+  .startgate{position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center; background:rgba(8,4,20,.8);}
+  .startgate.on{display:flex;}
+  .startgate .gatecard{background:#221A44; border:1px solid #6A57C9; border-radius:18px; padding:26px 24px 22px; text-align:center; width:78%; max-width:320px;}
+  .startgate .gt1{font-size:19px; font-weight:900; color:#FFE28A; letter-spacing:1px;}
+  .startgate .gt2{font-size:13px; color:#BBAFE6; margin-top:8px; line-height:1.6;}
+  .startgate .btn{margin-top:16px; width:100%; height:52px; font-size:21px;}
   .toast{
     position:absolute; left:50%; bottom:90px; transform:translateX(-50%) translateY(16px); z-index:90;
     background:rgba(20,10,36,.94); border:1.5px solid rgba(255,255,255,.2); border-radius:999px;
@@ -1269,7 +1276,7 @@ var PT = { table:null, pid:null, members:[], game:null, records:{}, timer:null, 
   lastRolls:null, selfActT:0, qTable:null, opening:false,
   myRolls:null, cupOpen:false, shakeBusy:false, rollSeq:0, paintedKey:null, animKey:null,
   flipBusy:false, spinH:null, shakeAnimDone:false, shakeRollsIn:false, shakeFailMsg:null,
-  gameEpoch:0, bombRK:null };
+  gameEpoch:0, bombRK:null, stateRev:0 };
 /* 门店网络模式：'store' = 店内 WiFi（可点歌 + 同桌联机） / 'solo' = 手机流量（只能单人玩）
    null = 还没判定完（先按联机处理，判定为 solo 后再收回） */
 var NET_MODE = null;
@@ -1322,6 +1329,14 @@ function ptJoin(table, silent){
   table = String(table || PT.qTable || '').trim().toUpperCase();
   if (!table){ table = (prompt('请输入桌号（桌上二维码上写着，如 D1）：') || '').trim().toUpperCase(); }
   if (!table) return;
+  /* 换桌加入期间立刻清掉旧会话（页面加载会自动恢复上次的桌）：
+     防止 join 在途时 ptAct 带着旧桌号打到旧房间 —— 真实场景：手机扫新桌码，过渡期点击全部落空 */
+  if (PT.table !== table){
+    PT.table = null; PT.pid = null; PT.members = []; PT.game = null; PT.failN = 0; PT.stateRev = 0;
+    PT.myRolls = null; PT.cupOpen = false; PT.flipBusy = false; PT.spinH = null;
+    try { ptSave(); } catch(e){}
+    try { paintPartyBar(); } catch(e){}
+  }
   ptApi('join', { table:table, uid:myUid(), name:S.me.name, avatar:S.me.face }, function(j){
     if (!j.ok){ toast(j.msg || '加入失败，请重试'); return }
     PT.table = j.table; PT.pid = j.pid; PT.failN = 0; PT.qTable = j.table;
@@ -1334,7 +1349,7 @@ function ptClear(msg){
   PT.pid = null; PT.table = null; PT.members = []; PT.game = null; PT.records = {};
   PT.myRolls = null; PT.cupOpen = false; PT.shakeBusy = false; PT.rollSeq = 0; PT.paintedKey = null; PT.animKey = null;
   PT.flipBusy = false; PT.spinH = null; PT.shakeAnimDone = false; PT.shakeRollsIn = false; PT.shakeFailMsg = null;
-  PT.gameEpoch = 0; PT.bombRK = null;
+  PT.gameEpoch = 0; PT.bombRK = null; PT.stateRev = 0;
   ptSave(); paintPartyBar();
   if (msg) toast(msg);
   var scr = document.querySelector('.screen.on');
@@ -1356,7 +1371,24 @@ function ptKick(target){
 function ptAct(body, cb){
   if (!PT.pid) return;
   PT.selfActT = Date.now();
-  ptApi('act', Object.assign({ table:PT.table, pid:PT.pid }, body), function(j){ if (cb) cb(j); });
+  ptApi('act', Object.assign({ table:PT.table, pid:PT.pid }, body), function(j){
+    /* act 响应自带最新房间视图（gp.js 回包附带）：立即应用，不等 900ms 轮询 —— 消除"点了没反应"的空窗 */
+    if (j && j.ok && j.game !== undefined && j.table && PT.table === j.table){
+      var rvA = j.rev || 0;
+      if (!(rvA > 0 && rvA < (PT.stateRev || 0))){
+        if (rvA > 0) PT.stateRev = rvA;
+        PT.prevGame = PT.game;
+        PT.game = j.game;
+        if (j.members) PT.members = j.members;
+        if (j.records) PT.records = j.records;
+        /* 转盘 act 自带 seq：先落 animKey，防止应用画面时 paintWheelSync 误判"没播过动画"
+           而再起一个 animateWheelTo，和落定动画并发把 wheelBusy 拖长 1.2s（下一轮点击被吞） */
+        if (j.seq !== undefined) PT.animKey = 'w' + j.seq;
+        try { ptApplyGame(PT.prevGame, PT.game); } catch(e){}
+      }
+    }
+    if (cb) cb(j);
+  });
 }
 var P_AV_OFF = ['🐻','🦊','🐼','🐸','🐺','🐰','🦁','🐵','🐨','🐯'];
 function paintPartyBar(){
@@ -1425,7 +1457,9 @@ $('pmList').addEventListener('click', function(e){
 function ptStartPoll(){
   if (PT.timer) clearInterval(PT.timer);
   ptPoll();
-  PT.timer = setInterval(ptPoll, 2500);   /* GitHub Gist 版：2.5s 轮询（读取带条件缓存，不耗额度） */
+  /* 轮询间隔自适应：局域网 0.9s（本地服务零成本），GitHub 2.5s（省配额） */
+  var pollMs = (typeof GPApi !== 'undefined' && GPApi.isLan && GPApi.isLan()) ? 900 : 2500;
+  PT.timer = setInterval(ptPoll, pollMs);
 }
 function ptPoll(){
   if (!PT.pid) return;
@@ -1438,6 +1472,11 @@ function ptPoll(){
       return;
     }
     PT.failN = 0;
+    /* rev 单调守卫：act 写入落盘前在途的轮询 GET 会拿到旧快照，晚到会回退画面（轮盘转一半回 ready、
+       毒药 set 被打回 guess 都是这个竞态）→ 旧 rev 直接丢弃 */
+    var rv = st.rev || 0;
+    if (rv > 0 && rv < (PT.stateRev || 0)) return;
+    if (rv > 0) PT.stateRev = rv;
     PT.members = st.members || [];
     PT.records = st.records || {};
     PT.prevGame = PT.game;
@@ -1497,6 +1536,7 @@ function ptApplyGame(prev, g){
   else if (scr === 'wheel') paintWheelSync();
   else if (scr === 'spy') paintSpySync();
   else if (scr === 'dice') paintDiceSync();   /* 大话骰：各摇各的，无跨机动画 */
+  updateStartGate();   /* 开局/结束/换游戏时刷新门禁遮罩 */
   /* 不在游戏页也能看到轮盘/骰子结果 */
   if (g && prev && scr && scr !== 'wheel' && scr !== 'dice' && scr !== 'bomb'){
     if (g.type === 'wheel' && g.phase === 'result' && prev.phase === 'ready'){
@@ -1522,9 +1562,24 @@ function go(id){
 window.addEventListener('popstate', function(){
   if (histDepth > 0){ histDepth = 0; showScreen('home'); }
 });
+function updateStartGate(){
+  var gate = $('startGate');
+  if (!gate) return;
+  var scrEl = document.querySelector('.screen.on');
+  var kind = scrEl ? ({ bomb:'bomb', wheel:'wheel', dice:'dice', spy:'spy' })[scrEl.id] : null;
+  var show = !!(ptSync() && !PT.game && kind);
+  gate.classList.toggle('on', show);
+  if (show){
+    var b = gate.querySelector('[data-sst]');
+    if (b) b.setAttribute('data-sst', kind);
+    var m = gate.querySelector('.gate-msg');
+    if (m) m.textContent = '本局 ' + PT.members.length + ' 人 · 成员到齐就点开局';
+  }
+}
 function showScreen(id){
   var scr = document.querySelectorAll('.screen');
   for (var i = 0; i < scr.length; i++) scr[i].classList.toggle('on', scr[i].id === id);
+  updateStartGate();
   if (id === 'bomb'){
     if (ptSync()) paintBombSync();
     else { $('bombSync').style.display = 'none'; $('wpIconBtn').style.display = ''; $('wpSizeBtn').style.display = ''; paintBomb(); }
@@ -1857,13 +1912,18 @@ function paintBombSync(){
       kids[z].innerHTML = wpFront(z, g.icon);
     }
   }
+  var nowMs = Date.now();
   for (var j = 0; j < kids.length; j++){
-    if (kids[j].classList.contains('flip') || kids[j].classList.contains('flipback')) continue;
+    var kj = kids[j];
+    var anim = kj.classList.contains('flip') || kj.classList.contains('flipback');
+    /* 动画进行中（0.7s 内）：不干扰；超时残留（定时器丢失/被重绘打断）：强制自愈，杜绝"点不动的死牌" */
+    if (anim && nowMs - (kj._flipAt || 0) < 700) continue;
+    if (anim) kj.classList.remove('flip', 'flipback');
     var isBoom = g.phase === 'boom' && g.boomedIdx === j;
     var isOpen = g.clicked.indexOf(j) >= 0;
-    if (isBoom){ kids[j].classList.add('opened'); kids[j].innerHTML = WP_BACK_POISON; }
-    else if (isOpen){ kids[j].classList.add('opened'); kids[j].innerHTML = WP_BACK_OK; }
-    else { kids[j].classList.remove('opened'); kids[j].innerHTML = wpFront(j, g.icon); }
+    if (isBoom){ kj.classList.add('opened'); kj.innerHTML = WP_BACK_POISON; }
+    else if (isOpen){ kj.classList.add('opened'); kj.innerHTML = WP_BACK_OK; }
+    else { kj.classList.remove('opened'); kj.innerHTML = wpFront(j, g.icon); }
   }
   if (g.phase === 'boom'){
     var boomer = null;
@@ -1880,6 +1940,7 @@ $('wpMaskBtn').addEventListener('click', function(){
 });
 /* 卡片翻回正面（隐藏毒药） */
 function wpFlipCardBack(b){
+  b._flipAt = Date.now();
   b.classList.remove('flip');
   b.classList.add('flipback');
   b.innerHTML = wpFront(+b.getAttribute('data-i'));
@@ -1919,6 +1980,7 @@ $('wpCancelBtn').addEventListener('click', function(){
 /* 翻转：转到 90° 时换内容，翻完呈现背面 */
 function wpFlipTo(b, backHtml, cb){
   if (b.classList.contains('flip') || b.classList.contains('flipback')) return;
+  b._flipAt = Date.now();
   b.classList.add('flip');
   setTimeout(function(){ b.innerHTML = backHtml; }, 260);
   if (cb) setTimeout(cb, 580);
@@ -1951,14 +2013,21 @@ $('wpGrid').addEventListener('click', function(e){
       wpFlipTo(b, WP_BACK_OK);
       ptAct({ act:'flip', index:i }, function(j){
         PT.flipBusy = false;
-        if (!j.ok){ toast(j.msg || '操作失败'); wpFlipCardBack(b); return }
+        if (!j.ok){
+          /* 响应失败但服务端其实已判中毒（轮询已同步 boom）→ 不回翻，以桌面为准 */
+          if (PT.game && PT.game.phase === 'boom'){ paintBombSync(); return }
+          toast(j.msg || '操作失败'); wpFlipCardBack(b); return;
+        }
         if (j.boom){
           b.innerHTML = WP_BACK_POISON; b.classList.add('opened');
-          /* 不等 2.5s 轮询：谁翻到毒药谁中毒，立刻切中毒结算画面 */
+          /* 不等轮询：谁翻到毒药谁中毒，立刻切中毒结算画面 */
           PT.game.phase = 'boom';
           PT.game.boomedIdx = i;
           PT.game.boomedPid = PT.pid;
           paintBombSync();
+        } else {
+          /* 状态已即时应用，但此刻卡还在 700ms 动画保护期内 → 动画结束后补一次重绘，标上 opened */
+          setTimeout(function(){ try { paintBombSync(); } catch(e){} }, 750);
         }
       });
       return;
@@ -2164,6 +2233,7 @@ function buildWheel(){
 /* 点击扇区 → 编辑项目 */
 $('wheelEl').addEventListener('click', function(ev){
   if (wheelBusy) return;
+  if (ptSync()) return;   /* 派对进行中扇区不可编辑（防误触弹出编辑框） */
   var seg = ev.target.closest ? ev.target.closest('.seg') : null;
   if (!seg) return;
   var i = parseInt(seg.getAttribute('data-i'), 10);
@@ -3684,6 +3754,7 @@ if (gom && $('' + gom)){
 
 /* ================= 测试钩子 ================= */
 window.__E = {
+  go: go,
   S: S, go: go, drawCard: drawCard,
   me: function(){ return S.me; },
   login: function(){ $('wxLoginBtn').click(); },
@@ -3719,5 +3790,12 @@ window.__E = {
 };
 })();
 </script>
+<div class="startgate" id="startGate">
+  <div class="gatecard">
+    <div class="gt1">📢 先点「▶ 开局」开始</div>
+    <div class="gt2 gate-msg">成员到齐后，点开局马上开始</div>
+    <button class="btn" data-sst="bomb">▶ 开局</button>
+  </div>
+</div>
 </body>
 </html>
