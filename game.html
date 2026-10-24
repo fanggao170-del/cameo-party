@@ -437,17 +437,19 @@
   .cup-hint.on{opacity:1; animation:hintBob 1.1s ease-in-out infinite;}
   @keyframes hintBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-9px)}}
   .rollrow{flex:none; display:flex; align-items:center; justify-content:center; gap:20px; padding:6px 0 4px;}
-  /* 氛围音效小圆钮：摆在「摇」的旁边，点一下直接拉出音效列表 */
-  .amborb{width:58px; height:58px; border-radius:50%; border:4px solid #E8E4DA; cursor:pointer; font-size:25px; line-height:1;
+  /* 氛围音效方钮：正方形，与「摇骰子」长方形按钮同高对齐 */
+  .amborb{width:88px; height:88px; border-radius:24px; border:4px solid #E8E4DA; cursor:pointer; font-size:34px; line-height:1;
     background:radial-gradient(circle at 38% 30%, #FFD75E 0%, #F0A93A 58%, #C67C16 100%);
     box-shadow:0 6px 0 #8A5A08, 0 10px 20px rgba(0,0,0,.5), inset 0 3px 6px rgba(255,255,255,.5);
-    display:flex; align-items:center; justify-content:center; padding:0;}
+    display:flex; align-items:center; justify-content:center; padding:0; flex:none;}
   .amborb:active{transform:translateY(3px); box-shadow:0 3px 0 #8A5A08, 0 6px 14px rgba(0,0,0,.5);}
-  .rollorb{width:88px; height:88px; border-radius:50%; border:5px solid #E8E4DA; cursor:pointer;
+  /* 「摇骰子」长方形主按钮 */
+  .rollorb{height:88px; padding:0 34px; border-radius:24px; border:5px solid #E8E4DA; cursor:pointer; flex:none;
     background:radial-gradient(circle at 38% 30%, #FF7B6B 0%, #E63A2E 55%, #B01E14 100%);
-    color:#fff; font-size:31px; font-weight:900; letter-spacing:1px;
+    color:#fff; font-size:30px; font-weight:900; letter-spacing:2px; white-space:nowrap;
     box-shadow:0 8px 0 #7E130C, 0 14px 26px rgba(0,0,0,.55), inset 0 3px 6px rgba(255,255,255,.45);
-    text-shadow:0 2px 3px rgba(0,0,0,.4);}
+    text-shadow:0 2px 3px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center;}
   .rollorb:active{transform:translateY(4px); box-shadow:0 4px 0 #7E130C, 0 8px 18px rgba(0,0,0,.5);}
   .rollorb:disabled{filter:grayscale(.5); opacity:.7;}
 
@@ -879,7 +881,7 @@
       </div>
       <div class="rollrow">
         <button class="amborb" id="ambBtn" aria-label="氛围音效">🎉</button>
-        <button class="rollorb" id="rollBtn">摇</button>
+        <button class="rollorb" id="rollBtn">🎲 摇骰子</button>
       </div>
     </div>
   </div>
@@ -1083,8 +1085,8 @@
 </div>
 
 <script src="gp.js?v=1024b"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024e</div>
-<script>try{document.getElementById('verBadge').textContent='v1024e·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024f</div>
+<script>try{document.getElementById('verBadge').textContent='v1024f·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -2437,13 +2439,15 @@ function pipsSvg(v){
   return h;
 }
 function dieFace(el, tv0, fv){
-  /* 真实骰子拓扑：三可见面点数互不相同；贴图动态生成，姿态统一自然 */
+  /* 真实骰子拓扑：三可见面点数互不相同；贴图动态生成，姿态统一自然。
+     【修复】之前顶面/右面/微转角每次重绘都重新随机 —— 开一次盖一次再开，
+     没摇也像"骰子换了"。现在同一把点数的姿态完全确定：重绘 = 像素级不变 */
   function neigh(x){ var a = []; for (var i = 1; i <= 6; i++){ if (i !== x && i !== 7 - x) a.push(i); } return a; }
   var tv = tv0;
-  if (tv === fv || tv === 7 - fv){ var na = neigh(fv); tv = na[Math.floor(Math.random() * na.length)]; }
+  if (tv == null || tv === fv || tv === 7 - fv){ var na = neigh(fv); tv = na[fv % na.length]; }
   var nb = neigh(fv).filter(function(x){ return x !== tv && x !== 7 - tv; });
-  var rv = nb[Math.floor(Math.random() * nb.length)];
-  var rz = (Math.random() * 14 - 7).toFixed(1);
+  var rv = nb[fv % nb.length];
+  var rz = ((fv * 37) % 15) - 7;   /* 微转角由点数决定，稳定不抖 */
   var defs = [
     ['df-front', fv], ['df-back', 7 - fv],
     ['df-top', tv], ['df-bottom', 7 - tv],
@@ -3115,7 +3119,7 @@ function ptShakeCupSettle(){
     PT.shakeBusy = false;
     PT.shakeFailMsg = null;
     $('rollBtn').disabled = false;
-    $('rollBtn').textContent = '摇';
+    $('rollBtn').textContent = '摇骰子';
     return;
   }
   PT.cupOpen = false;
@@ -3134,7 +3138,7 @@ function ptShakeCupSettle(){
   hint.classList.add('on');
   PT.shakeBusy = false;
   $('rollBtn').disabled = false;
-  $('rollBtn').textContent = '再摇一次';
+  $('rollBtn').textContent = '摇骰子';
 }
 /* 派对开盅：升起骰盅 + 亮出服务端发的点数（只发本人） */
 function ptOpenCupUI(){
@@ -3190,7 +3194,7 @@ function paintDiceSync(){
     (g.shaken ? ' · 已摇 ' + g.shaken + '/' + g.membersN : '') + esc(mine) + '</div>';
   if (PT.shakeBusy || cupDrag) return;   /* 摇动动画中 / 用户正在拖盅：别碰盅和骰面（修复：滑动到一半被轮询把骰面刷成随机、盅拽回扣下） */
   $('rollBtn').disabled = false;
-  $('rollBtn').textContent = PT.myRolls ? '再摇一次' : '摇';
+  $('rollBtn').textContent = '摇骰子';
   /* 盅与骰面按本地状态画，只在状态变化时动一次（轮询不闪烁） */
   var key = 'd' + (PT.cupOpen ? 'o' : 'c') + ':' + (PT.rollSeq || 0) + ':' + (PT.myRolls ? PT.myRolls.join('') : '-');
   if (PT.paintedKey === key) return;
