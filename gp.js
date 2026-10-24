@@ -28,10 +28,11 @@ var API = (typeof __GP_API__ !== 'undefined' && __GP_API__) ||
 
 /* ===== 派对规则（与原服务端一致） ===== */
 var SPY_PAIRS = [
-  ['可乐','雪碧'],['包子','饺子'],['奶茶','咖啡'],['洗发水','护发素'],['牛肉面','羊肉面'],
-  ['地铁','公交'],['口红','唇釉'],['钢琴','吉他'],['西瓜','哈密瓜'],['牙刷','牙膏'],
-  ['微信','QQ'],['淘宝','京东'],['火锅','串串'],['医生','护士'],['老师','教授'],
-  ['龙虾','螃蟹'],['自行车','电动车'],['婚礼','生日'],['空调','风扇'],['眼镜','隐形眼镜']
+  ['黄瓜','火腿肠'],['香蕉','茄子'],['香肠','热狗'],['奶茶','咖啡'],['火锅','串串'],
+  ['胸罩','泳衣'],['内裤','秋裤'],['丝袜','光腿'],['口红','唇釉'],['粉底','素颜霜'],
+  ['亲吻','拥抱'],['情书','情话'],['相亲','约会'],['洞房','蜜月'],['老婆','对象'],
+  ['蚊帐','渔网'],['洗澡','泡澡'],['打呼噜','说梦话'],['减肥','健身'],['失眠','熬夜'],
+  ['龙虾','螃蟹'],['螺蛳粉','酸辣粉'],['高跟鞋','松糕鞋'],['麻将','扑克'],['工资','奖金']
 ];
 var MEME_ACTIONS = ['大冒险','下家喝光','喝一杯','PASS','真心话','免喝','指定一人喝一杯','指定一人喝半杯',
   '大家干杯','再转一次','随便喝','指定一人喝一口','喝一口','找人干杯','喝半杯','上家喝光'];
@@ -313,7 +314,7 @@ function partyGamePub(room, pid){
       me:x.pid === pid, alive: (g.out || []).indexOf(x.pid) < 0 }; });
     out.aliveN = out.players.filter(function(p){ return p.alive; }).length;
     var meS = partyMember(room, pid);
-    if (meS && (g.out || []).indexOf(pid) < 0 && (g.phase === 'words' || g.phase === 'talk' || g.phase === 'vote')){
+    if (meS && (g.out || []).indexOf(pid) < 0){
       out.yourWord = pid === g.spyPid ? g.wordSpy : g.wordCivil;
     }
     if (g.phase === 'vote'){ out.myVote = g.votes[pid] || null; out.votedN = Object.keys(g.votes).length }
@@ -515,7 +516,8 @@ function actMutator(room, me, b){
       }
       return done();
     }
-    if (act === 'spyagain' && g.phase === 'result'){
+    if (act === 'spyagain'){
+      /* 极简卧底：任何阶段房主都能重新分配词语（不限 result） */
       var e3 = hostOnly(); if (e3) return e3;
       var pair2 = SPY_PAIRS[Math.floor(Math.random() * SPY_PAIRS.length)];
       var spyM3 = room.members[Math.floor(Math.random() * room.members.length)];
