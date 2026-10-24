@@ -1083,8 +1083,8 @@
 </div>
 
 <script src="gp.js?v=1024b"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024c</div>
-<script>try{document.getElementById('verBadge').textContent='v1024c·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024d</div>
+<script>try{document.getElementById('verBadge').textContent='v1024d·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -2917,6 +2917,14 @@ function cupDown(ev){
   _cupBusyAt = Date.now();
   var cup = $('cup3d');
   try{ if (window.PointerEvent && ev.pointerId != null && cup.setPointerCapture){ cup.setPointerCapture(ev.pointerId); } }catch(e){}
+  /* 兜底：按下瞬间就把真点数画上 —— 无论之前哪条路径漏画，拖起来第一毫米露出的都是真点数 */
+  if (ptSync() && PT.myRolls){
+    var ds0 = $('diceLine').children;
+    for (var i0 = 0; i0 < ds0.length && i0 < PT.myRolls.length; i0++){
+      ds0[i0].style.transform = '';
+      dieFace(ds0[i0], PT.myRolls[i0], PT.myRolls[i0]);
+    }
+  }
   cupDrag = { y0: ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY, frac0: cupFrac() };
   cup.style.transition = 'none';
   ev.preventDefault();
@@ -2928,17 +2936,7 @@ function cupMove(ev){
   cupDrag.frac = frac;
   $('cup3d').style.transform = 'translateY(' + (144 * (1 - frac)).toFixed(1) + 'px)';
   if (ev.cancelable) ev.preventDefault();
-  if (frac >= 0.85 && ptCupWait()){ /* 派对：拖到顶直接开盅（松手前就锁定，继续拖不影响） */
-    $('cupHint').classList.remove('on');
-    cupDrag = null;   /* 开盅后终止本次手势：手指再上下飘也不会把盅又拽回去 */
-    ptOpenCupUI();
-    return;
-  }
-  if (frac >= 0.85 && S.dice.awaitOpen){ /* 单机：拖到顶直接开盅结算 */
-    S.dice.awaitOpen = false;
-    $('cupHint').classList.remove('on');
-    setTimeout(function(){ settleDice(S.dice); }, 60);
-  }
+  /* 手指按住期间盅全程跟手（用户明确要求）：不在中途断手势/自动开盅，松手才定开盖 */
 }
 function cupEnd(ev){
   if (!cupDrag) return;
@@ -2947,8 +2945,8 @@ function cupEnd(ev){
   try{ if (window.PointerEvent && ev && ev.pointerId != null && cup.releasePointerCapture){ cup.releasePointerCapture(ev.pointerId); } }catch(e){}
   var frac = cupDrag.frac != null ? cupDrag.frac : cupDrag.frac0;
   cupDrag = null;
-  cup.style.transition = 'transform .32s ease-out';
-  if (frac >= 0.5){ /* 停在上半程 → 开 */
+  cup.style.transition = 'transform .3s ease-out';
+  if (frac >= 0.5){ /* 松手停在上半程 → 开 */
     cup.classList.remove('down');
     cup.style.transform = '';
     if (ptCupWait()){
@@ -2956,9 +2954,9 @@ function cupEnd(ev){
     } else if (S.dice.awaitOpen){
       S.dice.awaitOpen = false;
       $('cupHint').classList.remove('on');
-      setTimeout(function(){ settleDice(S.dice); }, 340);
+      setTimeout(function(){ settleDice(S.dice); }, 300);
     }
-  } else { /* 停在下半程 → 盖回 */
+  } else { /* 松手停在下半程 → 盖回 */
     void cup.offsetWidth;
     cup.classList.add('down');
     cup.style.transform = '';
@@ -3146,7 +3144,7 @@ function ptOpenCupUI(){
   var cup = $('cup3d'), ds = $('diceLine').children;
   $('cupHint').classList.remove('on');
   cup.classList.remove('swipeable');
-  cup.style.transition = 'transform .6s cubic-bezier(.3,.85,.35,1)';
+  cup.style.transition = 'transform .3s cubic-bezier(.3,.85,.35,1)';
   cup.classList.remove('down');
   cup.style.transform = '';
   for (var i = 0; i < ds.length && i < PT.myRolls.length; i++){
@@ -3155,7 +3153,7 @@ function ptOpenCupUI(){
   }
   /* 记账：告诉 paintDiceSync 这个状态已经画过了 —— 防止轮询把 .6s 升盅动画瞬间拍成到位 */
   PT.paintedKey = 'd' + 'o' + ':' + (PT.rollSeq || 0) + ':' + PT.myRolls.join('');
-  setTimeout(function(){ cup.style.transition = ''; }, 650);
+  setTimeout(function(){ cup.style.transition = ''; }, 320);
 }
 function paintDiceSync(){
   var g = PT.game;
