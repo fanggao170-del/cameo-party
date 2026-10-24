@@ -103,7 +103,7 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024d·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024e·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
@@ -142,31 +142,42 @@
     var lm = document.getElementById('lanManual');
     lm.href = LAN_URL + '/' + carry;
     lm.style.display = 'block';
-    /* 探测店里服务可达性：双保险。
-       【修复】原来用 Image 探测 /api/ping —— 返回 JSON 不是图片，永远 onerror，极速版入口从来不亮！
-       现在：① fetch no-cors（网络通即 resolve）② Image 探测真实图片 ping.png（部分 WebView 拦 fetch 不拦图片）。
-       任一成功 = 在店里 → 自动切极速版（旧桌卡指向 GitHub 也不用重印） */
-    var probed = false;
+    /* 探测店里服务可达性：双保险 + 持续重试。
+       【修复·重要竞态】旧版探测只有 3 秒窗口且超时会把"已完成"标志置位 ——
+       手机 WiFi 休眠唤醒后第一个包经常要 1-3 秒+ 才通，探测刚成功就被超时标记丢弃，
+       表现为"时灵时不灵"。现在：每 2 秒重试、最长 20 秒，任何一次成功都立即自动切换；
+       4 秒还没切出去就亮出「点此进入」按钮兜底（探测成功照常自动切）。
+       ① fetch no-cors（网络通即 resolve）② Image 探测真实图片 ping.png（部分 WebView 拦 fetch 不拦图片） */
+    var gone = false;   /* 已经决定切换（防重复跳转） */
+    var probeN = 0;
+    var bar = document.getElementById('lanbar');
     var goLan = function () {
-      if (probed) return; probed = true;
-      var bar = document.getElementById('lanbar');
+      if (gone) return; gone = true;
       bar.style.display = 'block';
       bar.querySelector('.t1').textContent = '⚡ 已连上店里 WiFi · 正在切换极速版…';
       bar.querySelector('.t2').textContent = '桌号自动带上，马上就好';
-      setTimeout(function () { location.replace(LAN_URL + '/' + carry); }, 450);
+      setTimeout(function () { location.replace(LAN_URL + '/' + carry); }, 350);
     };
-    var probe = function () {
-      try { fetch(LAN_URL + '/api/ping?t=' + Date.now(), { mode: 'no-cors', cache: 'no-store' }).then(goLan).catch(function () {}); } catch (e) {}
+    var probeOnce = function () {
+      if (gone) return;
+      try { fetch(LAN_URL + '/ping.png?t=' + Date.now(), { mode: 'no-cors', cache: 'no-store' }).then(function () { goLan(); }).catch(function () {}); } catch (e) {}
       try {
         var img = new Image();
         img.onload = goLan;
-        img.src = LAN_URL + '/ping.png?t=' + Date.now();
+        img.src = LAN_URL + '/ping.png?t=' + Date.now() + '&n=' + (++probeN);
       } catch (e) {}
-      setTimeout(function () {
-        if (!probed){ probed = true; document.getElementById('lanbar').style.display = 'none'; }   /* 不在店里：收起 */
-      }, 3000);
     };
-    probe();
+    probeOnce();
+    var probeIv = setInterval(probeOnce, 2000);
+    setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
+    /* 4 秒还没切出去 → 把横幅变成手动按钮（探测继续，一旦成功仍然自动切） */
+    setTimeout(function () {
+      if (gone) return;
+      bar.style.display = 'block';
+      bar.querySelector('.t1').textContent = '⚡ 点此进入店内极速版';
+      bar.querySelector('.t2').textContent = '店里 WiFi 下快 50 倍 · 自动没切就手动点一下';
+      bar.onclick = function () { location.href = LAN_URL + '/' + carry; };
+    }, 4000);
   }
 
   btnParty.onclick = function () {
