@@ -103,8 +103,9 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024b</span>
+    <span style="opacity:.7;">版本 v1024b·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
+  <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
   <div class="toastbox" id="toast"></div>
   <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
@@ -131,11 +132,16 @@
   var isLanPage = location.protocol === 'http:';
   var LAN_URL = 'http://192.168.100.28:8877';   /* 店里服务 IP，变了改这里 */
   var ONLINE_URL = 'https://fanggao170-del.github.io/cameo-party/';
+  try { document.getElementById('verLine').textContent = isLanPage ? '店里极速' : '云端'; } catch (e) {}
   if (isLanPage) {
     var wl = document.getElementById('weblink');
     wl.href = ONLINE_URL + carry;
     wl.style.display = 'inline-block';
   } else {
+    /* 常驻手动入口：自动探测可能被浏览器拦，这里给一条保底的路 */
+    var lm = document.getElementById('lanManual');
+    lm.href = LAN_URL + '/' + carry;
+    lm.style.display = 'block';
     /* 探测局域网服务可达性（Image 不受 CORS 限制；被浏览器拦就当不可达，安静降级） */
     var probed = false;
     var img = new Image();
