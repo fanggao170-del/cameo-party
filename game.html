@@ -2764,6 +2764,13 @@ $('rollBtn').addEventListener('click', function(){
     PT.shakeAnimDone = false; PT.shakeRollsIn = false; PT.shakeFailMsg = null;
     $('rollBtn').disabled = true;
     ptShakeCupStart();          /* 摇盅动画立即开始，不等云端一圈 */
+    /* 网络响应丢了也不许锁死页面：8 秒没回话就自救（修复：盅永远打不开、按钮永远灰） */
+    setTimeout(function(){
+      if (PT.shakeBusy && !PT.shakeRollsIn && !PT.shakeFailMsg){
+        PT.shakeFailMsg = '网络卡了一下，请再摇一次';
+        if (PT.shakeAnimDone) ptShakeCupSettle();
+      }
+    }, 8000);
     ptAct({ act:'shake' }, function(j){
       if (!j.ok){
         PT.shakeFailMsg = (j.msg || '摇骰失败');
@@ -2836,8 +2843,10 @@ function cupFrac(){
   return $('cup3d').classList.contains('down') ? 0 : 1;
 }
 function cupDown(ev){
+  if (cupDrag) return;   /* 已在拖动中（盅/区双绑定冒泡会触发两次）：忽略 */
   if (S.dice.busy || PT.shakeBusy) return;
-  if (ptSync() && !ptCupWait()) return;   /* 派对模式：只有扣着且摇过才能拖开（开盅后点「再摇」即可） */
+  if (ev && ev.target && ev.target.closest && ev.target.closest('#rollBtn,#diceCountBtn,#ambBtn')) return;   /* 别拦按钮 */
+  if (ptSync() && !PT.myRolls) return;   /* 派对：摇过才能拖 —— 扣着→上滑开盅，开着→下滑盖上（修复：开了盖不上） */
   _cupBusyAt = Date.now();
   var cup = $('cup3d');
   try{ if (window.PointerEvent && ev.pointerId != null && cup.setPointerCapture){ cup.setPointerCapture(ev.pointerId); } }catch(e){}
@@ -2852,8 +2861,9 @@ function cupMove(ev){
   cupDrag.frac = frac;
   $('cup3d').style.transform = 'translateY(' + (144 * (1 - frac)).toFixed(1) + 'px)';
   if (ev.cancelable) ev.preventDefault();
-  if (frac >= 0.85 && ptCupWait()){ /* 派对：拖到顶直接开盅 */
+  if (frac >= 0.85 && ptCupWait()){ /* 派对：拖到顶直接开盅（松手前就锁定，继续拖不影响） */
     $('cupHint').classList.remove('on');
+    cupDrag = null;   /* 开盅后终止本次手势：手指再上下飘也不会把盅又拽回去 */
     ptOpenCupUI();
     return;
   }
@@ -2885,22 +2895,33 @@ function cupEnd(ev){
     void cup.offsetWidth;
     cup.classList.add('down');
     cup.style.transform = '';
+    if (ptSync() && PT.cupOpen){   /* 派对：下滑盖上（盖回后仍可再上滑重开） */
+      PT.cupOpen = false;
+      PT.paintedKey = null;
+      if (PT.myRolls){
+        cup.classList.add('swipeable');
+        $('cupHint').textContent = '↑ 上滑开盅 · ↓ 下滑盖上';
+        $('cupHint').classList.add('on');
+      }
+    }
   }
 }
 (function bindCupSwipe(){
   var cup = $('cup3d');
+  var zone = $('cupZone');   /* 手势热区扩大到整个骰盅区（修复：手指没按准盅本体就怎么滑都没反应） */
+  function bindAll(el, pairs, passive){
+    for (var i = 0; i < pairs.length; i++) el.addEventListener(pairs[i][0], pairs[i][1], passive ? { passive:false } : false);
+  }
+  var DOWN = [cupDown, cupMove, cupEnd, cupEnd];   /* down / move / up / cancel */
   if (window.PointerEvent){
-    cup.addEventListener('pointerdown', cupDown);
-    cup.addEventListener('pointermove', cupMove);
-    cup.addEventListener('pointerup', cupEnd);
-    cup.addEventListener('pointercancel', cupEnd);
+    var pevs = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
+    bindAll(cup, pevs.map(function(n, i){ return [n, DOWN[i]]; }), true);
+    bindAll(zone, pevs.map(function(n, i){ return [n, DOWN[i]]; }), true);
   } else {
-    cup.addEventListener('touchstart', cupDown, { passive:false });
-    cup.addEventListener('touchmove', cupMove, { passive:false });
-    cup.addEventListener('touchend', cupEnd);
-    cup.addEventListener('mousedown', cupDown);
-    cup.addEventListener('mousemove', cupMove);
-    cup.addEventListener('mouseup', cupEnd);
+    var tevs = ['touchstart', 'touchmove', 'touchend', 'mousedown', 'mousemove', 'mouseup'];
+    var thand = [cupDown, cupMove, cupEnd, cupDown, cupMove, cupEnd];
+    bindAll(cup, tevs.map(function(n, i){ return [n, thand[i]]; }), true);
+    bindAll(zone, tevs.map(function(n, i){ return [n, thand[i]]; }), true);
   }
 })();
 function openCup(){
@@ -3030,7 +3051,7 @@ function ptShakeCupSettle(){
   PT.cupOpen = false;
   /* 扣着等开：可以拖了 */
   $('cup3d').classList.add('swipeable');
-  hint.textContent = '↑ 上滑开盅';
+  hint.textContent = '↑ 上滑开盅 · ↓ 下滑盖上';
   hint.classList.add('on');
   PT.shakeBusy = false;
   $('rollBtn').disabled = false;
@@ -3051,6 +3072,8 @@ function ptOpenCupUI(){
     ds[i].style.transform = '';
     dieFace(ds[i], PT.myRolls[i], PT.myRolls[i]);
   }
+  /* 记账：告诉 paintDiceSync 这个状态已经画过了 —— 防止轮询把 .6s 升盅动画瞬间拍成到位 */
+  PT.paintedKey = 'd' + 'o' + ':' + (PT.rollSeq || 0) + ':' + PT.myRolls.join('');
   setTimeout(function(){ cup.style.transition = ''; }, 650);
 }
 function paintDiceSync(){
@@ -3086,7 +3109,7 @@ function paintDiceSync(){
   var mine = PT.cupOpen ? ' · 数数有几个几，开喊吧！' : (PT.myRolls ? ' · ↑ 上滑开盅看你的点数' : ' · 点「摇」或晃一晃手机');
   sync.innerHTML = '<div class="smsg">🎲 大话骰 · 各摇各的' +
     (g.shaken ? ' · 已摇 ' + g.shaken + '/' + g.membersN : '') + esc(mine) + '</div>';
-  if (PT.shakeBusy) return;   /* 摇动动画中，轮询别碰盅和按钮 */
+  if (PT.shakeBusy || cupDrag) return;   /* 摇动动画中 / 用户正在拖盅：别碰盅和骰面（修复：滑动到一半被轮询把骰面刷成随机、盅拽回扣下） */
   $('rollBtn').disabled = false;
   $('rollBtn').textContent = PT.myRolls ? '再摇一次' : '摇';
   /* 盅与骰面按本地状态画，只在状态变化时动一次（轮询不闪烁） */
@@ -3101,13 +3124,21 @@ function paintDiceSync(){
       dieFace(ds[i], PT.myRolls[i], PT.myRolls[i]);
     }
   } else {
-    cup.classList.remove('swipeable');
-    $('cupHint').classList.remove('on');
     cup.style.transition = 'none'; cup.classList.add('down');
     void cup.offsetWidth; cup.style.transition = '';
+    cup.style.transform = '';
     for (var r0 = 0; r0 < ds.length; r0++){
       ds[r0].style.transform = '';
       dieFace(ds[r0], 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6));
+    }
+    if (PT.myRolls){
+      /* 扣着且有自己的点数 → 保持可拖（修复：轮询重绘撕掉 swipeable，看起来像"打不开"） */
+      cup.classList.add('swipeable');
+      $('cupHint').textContent = '↑ 上滑开盅 · ↓ 下滑盖上';
+      $('cupHint').classList.add('on');
+    } else {
+      cup.classList.remove('swipeable');
+      $('cupHint').classList.remove('on');
     }
   }
 }
