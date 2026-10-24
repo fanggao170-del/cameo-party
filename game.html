@@ -72,26 +72,29 @@
   #home{padding-top:12px;}
   .topbar{flex:none; display:flex; align-items:center; gap:9px; margin-bottom:10px;}
   .me-card{
-    display:flex; align-items:center; gap:8px; padding:6px 12px 6px 7px; border-radius:999px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; padding:4px 10px 4px 6px; border-radius:999px; cursor:pointer;
     background:rgba(255,255,255,.07); border:1.5px solid rgba(255,255,255,.15);
   }
   .me-card:active{transform:scale(.97);}
   .me-face{
-    width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    font-size:22px; background:linear-gradient(160deg,#FFD75E,#FF5D9E);
+    width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:17px; background:linear-gradient(160deg,#FFD75E,#FF5D9E);
   }
-  .me-card .me-name{font-size:18px; font-weight:900; letter-spacing:1px;}
-  .me-card .me-cups{font-size:15px; color:#B9A8D8; font-weight:800;}
-  .topbar .hb-ico{margin-left:auto; font-size:24px; cursor:pointer; filter:drop-shadow(0 0 8px rgba(255,93,158,.5));}
+  .me-card .me-name{font-size:14px; font-weight:900; letter-spacing:.5px;}
+  .me-card .me-cups{font-size:12px; color:#B9A8D8; font-weight:800;}
+  .topbar .hb-ico{margin-left:auto; font-size:22px; cursor:pointer; filter:drop-shadow(0 0 8px rgba(255,93,158,.5));}
   .logo{flex:none; text-align:center; margin-bottom:6px;}
-  .logo .drink{font-size:43px; display:block; animation:bob 2.6s ease-in-out infinite;}
   .logo h1{
-    font-size:27px; font-weight:900; letter-spacing:2px; margin-top:4px; white-space:nowrap;
+    font-size:33px; font-weight:900; letter-spacing:2px; margin-top:2px; white-space:nowrap;
     background:linear-gradient(180deg,#FFF 18%,#FFD9E8 55%,#FF7CB4 100%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
     filter:drop-shadow(0 0 16px rgba(255,77,143,.45)) drop-shadow(0 3px 0 rgba(120,20,70,.55));
   }
-  .logo .tag{font-size:15px; color:#B9A8D8; letter-spacing:4px; font-weight:700; margin-top:2px;}
+  /* 酒杯做背景水印：垫在「今夜 · 谁先倒下」文字后面，半透明不抢字 */
+  .logo .tag{position:relative; font-size:15px; color:#B9A8D8; letter-spacing:4px; font-weight:700; margin-top:2px; display:inline-block; padding:0 6px;}
+  .logo .drink{position:absolute; left:calc(50% - 27px); top:-14px; font-size:54px; opacity:.28; z-index:0; pointer-events:none;
+    filter:drop-shadow(0 4px 12px rgba(0,0,0,.45));}
+  .logo .tagtx{position:relative; z-index:1;}
   .playerbar{flex:none; margin:10px 0 8px; padding:9px 12px;}
   .playerbar .pb-hd{display:flex; align-items:center; margin-bottom:7px;}
   .playerbar .pb-hd b{font-size:17px; letter-spacing:2px; color:#CBBCE8;}
@@ -149,6 +152,13 @@
   .mode.spym .m-name{color:#FFB3D9;} .mode.spym{border-color:rgba(255,120,190,.42);}
   .mode.danmaku .m-name{color:#E8B4FF;} .mode.danmaku{border-color:rgba(190,120,255,.4);}
   .mode.strobe .m-name{color:#BFF3FF;} .mode.strobe{border-color:rgba(120,220,255,.4);}
+  /* 扫码点歌：整行横条卡 */
+  .mode.wide{grid-column:1 / -1; flex-direction:row; align-items:center; gap:13px; min-height:64px; padding:11px 15px;}
+  .mode.wide .m-ico{position:static; font-size:30px; flex:none;}
+  .mode.wide .mtxt{flex:1; min-width:0;}
+  .mode.wide .m-name{padding-right:0;}
+  .mode.wide .song-arrow{flex:none; font-size:22px; font-weight:900; color:rgba(255,255,255,.35);}
+  .mode.songm .m-name{color:#FFE08A;} .mode.songm{border-color:rgba(255,215,94,.42);}
   .footrow{flex:none; display:flex; align-items:center; gap:8px; margin-top:10px;}
   .theme-toggle{
     flex:1; height:38px; border-radius:13px; border:1.5px solid rgba(255,255,255,.16);
@@ -706,9 +716,8 @@
       <span class="hb-ico" id="heartIco" title="夜店模式">💫</span>
     </div>
     <div class="logo">
-      <span class="drink">🍺</span>
       <h1>CAMEO酒令派对</h1>
-      <div class="tag">今夜 · 谁先倒下</div>
+      <div class="tag"><span class="drink">🍺</span><span class="tagtx">今夜 · 谁先倒下</span></div>
     </div>
     <!-- 派对成员栏：扫同桌码 + 微信登录即加入 · 房主可踢人 · 可邀请微信好友 -->
     <div class="partybar glass" id="partyBar"></div>
@@ -732,6 +741,14 @@
         <div class="m-ico">🕵️</div>
         <div class="m-name">谁是卧底</div>
         <div class="m-desc">开房组队 · 抓卧底</div>
+      </div>
+      <div class="mode glass wide songm" data-go="song">
+        <div class="m-ico">🎵</div>
+        <div class="mtxt">
+          <div class="m-name">扫码点歌</div>
+          <div class="m-desc">搜歌点播 · 生日祝福 · 大屏秒上屏</div>
+        </div>
+        <div class="song-arrow">›</div>
       </div>
       <div class="mode glass danmaku" data-go="danmaku">
         <div class="m-ico">📣</div>
@@ -1101,9 +1118,9 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="gp.js?v=1024g"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024g</div>
-<script>try{document.getElementById('verBadge').textContent='v1024g·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="gp.js?v=1024h"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024h</div>
+<script>try{document.getElementById('verBadge').textContent='v1024h·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -1641,6 +1658,14 @@ document.querySelectorAll('[data-go]').forEach(function(el){
     if ((id === 'box' || id === 'ach') && !S.me){ openLoginFor(id); return }
     /* 谁是卧底天生多人：手机流量单人模式直接拦下 */
     if (id === 'spy' && NET_MODE === 'solo'){ toast('谁是卧底要 3 人以上联机 · 连店里 WiFi 才能开'); return }
+    /* 扫码点歌：店内局域网 → 跳点歌台（同源 /song，与派对同一个服务）；线上版 → 提示连店 WiFi */
+    if (id === 'song'){
+      var tq = (PT.table || (location.search.match(/[?&]t=([^&]*)/) || [])[1] || '');
+      var qs = tq ? '?t=' + encodeURIComponent(decodeURIComponent(tq)) : '';
+      if (location.protocol === 'http:'){ location.href = '/song' + qs; return }
+      toast('扫码点歌要连店里 WiFi · 扫桌上的二维码进极速版');
+      return;
+    }
     go(id);
   });
 });
