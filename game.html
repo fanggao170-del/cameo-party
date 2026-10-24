@@ -421,20 +421,20 @@
     background:radial-gradient(ellipse at 50% 34%, #4E93DC 0%, #2F6BB4 52%, #1E4C85 100%);
     box-shadow:0 0 0 5px rgba(90,150,210,.35), inset 0 10px 16px rgba(255,255,255,.28), inset 0 -14px 22px rgba(0,0,30,.5), 0 18px 34px rgba(0,0,0,.6);}
   .diceline{position:absolute; left:50%; bottom:30px; width:260px; height:82px; margin-left:-130px;}
-  /* 2.5D 卡通立体骰（CSS 3D 立方体 · 45°俯视 · 顶面最大 · 位置由 JS 按数量散摆 · 蓝点 / 1·4 红点） */
-  .die3d{width:36px; height:36px; position:absolute; z-index:1; perspective:400px;}
+  /* 2.5D 卡通立体骰（CSS 3D 立方体 · 正面60°俯视 · 顶面最大 · 位置由 JS 按数量散摆 · 蓝点 / 1·4 红点） */
+  .die3d{width:40px; height:40px; position:absolute; z-index:1; perspective:400px;}   /* v1024l：36→40px 放大 ~10% */
   .die3d .cube{position:relative; width:100%; height:100%; transform-style:preserve-3d;}
-  .dface{position:absolute; left:0; top:0; width:100%; height:100%; border-radius:7px; box-shadow:inset 0 0 5px rgba(0,10,40,.08);}
+  .dface{position:absolute; left:0; top:0; width:100%; height:100%; border-radius:7.8px; box-shadow:inset 0 0 5px rgba(0,10,40,.08);}
   .dface:not(.dim){box-shadow:none;}   /* 朝上的主面：无任何阴影，最亮最清楚 */
   .dface svg{width:100%; height:100%; display:block;}
   /* 侧面压暗：主面（点数面）保持雪白鲜亮，一眼认读 */
   .dface.dim{filter:brightness(.58) saturate(.85);}
-  .df-front {transform:translateZ(18px);                 background:linear-gradient(135deg,#FFFFFF,#EDEFF4);}
-  .df-back  {transform:rotateY(180deg) translateZ(18px); background:linear-gradient(135deg,#E4E8EF,#D2D7E1);}
-  .df-right {transform:rotateY(90deg) translateZ(18px);  background:linear-gradient(135deg,#E1E5ED,#CBD1DC);}
-  .df-left  {transform:rotateY(-90deg) translateZ(18px); background:linear-gradient(135deg,#E8EBF1,#D6DBE5);}
-  .df-top   {transform:rotateX(90deg) translateZ(18px);  background:linear-gradient(135deg,#FFFFFF,#F1F3F8);}
-  .df-bottom{transform:rotateX(-90deg) translateZ(18px); background:linear-gradient(135deg,#DDE2EA,#C9CFDA);}
+  .df-front {transform:translateZ(20px);                 background:linear-gradient(135deg,#FFFFFF,#EDEFF4);}
+  .df-back  {transform:rotateY(180deg) translateZ(20px); background:linear-gradient(135deg,#E4E8EF,#D2D7E1);}
+  .df-right {transform:rotateY(90deg) translateZ(20px);  background:linear-gradient(135deg,#E1E5ED,#CBD1DC);}
+  .df-left  {transform:rotateY(-90deg) translateZ(20px); background:linear-gradient(135deg,#E8EBF1,#D6DBE5);}
+  .df-top   {transform:rotateX(90deg) translateZ(20px);  background:linear-gradient(135deg,#FFFFFF,#F1F3F8);}
+  .df-bottom{transform:rotateX(-90deg) translateZ(20px); background:linear-gradient(135deg,#DDE2EA,#C9CFDA);}
   /* 各数量的摆位由 JS 内联设置（前排 z 高、后排 z 低，靠拢但不遮挡） */
   /* 盅随 zone 高度从底部锚定（原 top:0 写死 420px 高度；zone 收缩后按 H-268 锚定，开/盖几何不变） */
   .cup3d{
@@ -1125,10 +1125,10 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="i18n.js?v=1024k"></script>
-<script src="gp.js?v=1024k"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024k</div>
-<script>try{document.getElementById('verBadge').textContent='v1024k·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="i18n.js?v=1024l"></script>
+<script src="gp.js?v=1024l"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024l</div>
+<script>try{document.getElementById('verBadge').textContent='v1024l·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -2511,12 +2511,12 @@ function dieFace(el, tv0, fv){
     ['df-top', tv], ['df-bottom', 7 - tv],
     ['df-right', rv], ['df-left', 7 - rv]
   ];
-  var h = '<div class="cube" style="transform:rotateZ(' + rz + 'deg) rotateX(-45deg) rotateY(-45deg)">';
+  var h = '<div class="cube" style="transform:rotateZ(' + rz + 'deg) rotateX(-60deg) rotateY(-45deg)">';
   for (var i = 0; i < 6; i++){
     /* 主面 = 朝上的顶面（像真骰子一样读"朝上"的面）：无阴影点大鲜亮；其余五面压暗做阴影 */
     var main = defs[i][0] === 'df-top';
     h += '<div class="dface ' + defs[i][0] + (main ? '' : ' dim') + '"><svg viewBox="0 0 54 54">' +
-      pipsSvg(defs[i][1], main ? 8.2 : 5) + '</svg></div>';
+      pipsSvg(defs[i][1], main ? 6.8 : 5) + '</svg></div>';   /* 主面点半径 8.2→6.8：格距14，8.2 时相邻点重叠显得挤 */
   }
   el.innerHTML = h + '</div>';
   el._fv = fv;
