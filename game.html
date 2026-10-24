@@ -6,7 +6,7 @@
 <title>CAMEO酒令派对</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
+  html,body{height:100%; overscroll-behavior:none;}
   body{
     font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
     background:#0D0818; color:#F5EFFA;
@@ -14,7 +14,7 @@
     user-select:none;
   }
   .phone{
-    width:100%; max-width:420px; height:100vh; max-height:896px; position:relative; overflow:hidden;
+    width:100%; max-width:420px; height:100vh; height:100dvh; max-height:896px; position:relative; overflow:hidden;
     background:
       radial-gradient(420px 300px at 82% -4%, rgba(255,77,143,.16), transparent 60%),
       radial-gradient(380px 300px at 12% 104%, rgba(77,216,255,.12), transparent 60%),
@@ -22,6 +22,18 @@
     display:flex; flex-direction:column;
   }
   .screen{position:absolute; inset:0; display:none; flex-direction:column; padding:18px 18px 22px; overflow:hidden;}
+  /* 矮屏适配：收紧内边距与标题，保证各游戏主按钮不被挤出屏幕 */
+  @media (max-height:700px){
+    .screen{padding:10px 12px 12px;}
+    .scr-top{margin-bottom:8px;}
+    .scr-title{font-size:19px;}
+    .cupzone{height:clamp(280px, calc(100dvh - 330px), 360px);}
+    .cup3d{width:246px; height:227px; margin-left:-123px; bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 227px);}
+    .cup-hint{bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 134px);}
+    .rollorb{height:72px; font-size:25px; padding:0 26px;}
+    .amborb{width:72px; height:72px; font-size:28px;}
+    .spy-big{height:50px; font-size:19px;}
+  }
   .screen.on{display:flex;}
   .scr-top{flex:none; display:flex; align-items:center; gap:10px; margin-bottom:14px;}
   .backbtn{
@@ -397,7 +409,8 @@
   .sfx-list.amb .sfx-opt .se{font-size:32px;}
   .sfx-list.amb .sfx-opt .st b{font-size:16px;}
   .sfx-list.amb .sfx-opt .st i{display:none;}
-  .cupzone{flex:none; position:relative; width:100%; height:420px; margin-top:0; touch-action:none; -webkit-user-select:none; user-select:none;}
+  /* 高度自适应：clamp 保证矮屏（手机带地址栏）也把「摇骰子」按钮完整露出（cupzone 让位收缩） */
+  .cupzone{flex:none; position:relative; width:100%; height:clamp(330px, calc(100dvh - 360px), 420px); margin-top:0; touch-action:none; -webkit-user-select:none; user-select:none;}
   .zoneShake{animation:cupShake .13s linear infinite;}
   @keyframes cupShake{
     0%{transform:translate(0,0) rotate(0)}
@@ -415,6 +428,8 @@
   .die3d .cube{position:relative; width:100%; height:100%; transform-style:preserve-3d;}
   .dface{position:absolute; left:0; top:0; width:100%; height:100%; border-radius:7px; box-shadow:inset 0 0 5px rgba(0,10,40,.08);}
   .dface svg{width:100%; height:100%; display:block;}
+  /* 侧面压暗：主面（点数面）保持雪白鲜亮，一眼认读 */
+  .dface.dim{filter:brightness(.58) saturate(.85);}
   .df-front {transform:translateZ(18px);                 background:linear-gradient(135deg,#FFFFFF,#EDEFF4);}
   .df-back  {transform:rotateY(180deg) translateZ(18px); background:linear-gradient(135deg,#E4E8EF,#D2D7E1);}
   .df-right {transform:rotateY(90deg) translateZ(18px);  background:linear-gradient(135deg,#E1E5ED,#CBD1DC);}
@@ -422,15 +437,16 @@
   .df-top   {transform:rotateX(90deg) translateZ(18px);  background:linear-gradient(135deg,#FFFFFF,#F1F3F8);}
   .df-bottom{transform:rotateX(-90deg) translateZ(18px); background:linear-gradient(135deg,#DDE2EA,#C9CFDA);}
   /* 各数量的摆位由 JS 内联设置（前排 z 高、后排 z 低，靠拢但不遮挡） */
+  /* 盅随 zone 高度从底部锚定（原 top:0 写死 420px 高度；zone 收缩后按 H-268 锚定，开/盖几何不变） */
   .cup3d{
-    position:absolute; left:50%; top:0; width:290px; height:268px; margin-left:-145px; z-index:6;
+    position:absolute; left:50%; bottom:calc(clamp(330px, calc(100dvh - 360px), 420px) - 268px); width:290px; height:268px; margin-left:-145px; z-index:6;
     pointer-events:none; transition:transform 1s cubic-bezier(.3,.85,.35,1);
   }
   .cup3d.down{transform:translateY(144px);}
   .cup3d.swipeable{pointer-events:auto; touch-action:none; cursor:grab;}
   .cup3d svg{width:100%; height:100%; display:block; filter:drop-shadow(0 18px 28px rgba(0,0,0,.55));}
   .cup-hint{
-    position:absolute; left:50%; bottom:286px; transform:translateX(-50%); z-index:8;
+    position:absolute; left:50%; bottom:calc(clamp(330px, calc(100dvh - 360px), 420px) - 134px); transform:translateX(-50%); z-index:8;
     font-size:18px; font-weight:900; letter-spacing:3px; color:#FFE27A; opacity:0; pointer-events:none;
     text-shadow:0 2px 8px rgba(0,0,0,.8); transition:opacity .25s;
   }
@@ -614,6 +630,7 @@
   .spy-word{font-size:36px; font-weight:900; color:#FFD75E; letter-spacing:3px; text-align:center; padding:16px 0;}
   .spy-big{width:100%; height:60px; border-radius:16px; border:none; font-size:22px; font-weight:900; letter-spacing:2px;
     background:linear-gradient(180deg,#FFE56A,#E8A93A); color:#5A2A00; box-shadow:0 10px 26px rgba(232,169,58,.35); margin-top:4px;}
+  .spy-big.alt{background:linear-gradient(180deg,#54DEFF,#2EB4E8); color:#073246; box-shadow:0 10px 26px rgba(46,180,232,.3);}
   .spy-big:disabled{filter:grayscale(1); opacity:.5;}
   .spy-votes{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .spy-vote{height:56px; border-radius:14px; border:1.5px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08);
@@ -1084,9 +1101,9 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="gp.js?v=1024b"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024f</div>
-<script>try{document.getElementById('verBadge').textContent='v1024f·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="gp.js?v=1024g"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024g</div>
+<script>try{document.getElementById('verBadge').textContent='v1024g·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -2425,17 +2442,20 @@ $('spinBtn').addEventListener('click', spinWheel);
 var PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
 /* 面点阵（54x54，三列均布 13/27/41；蓝点 / 1·4 红点，照参考图配色） */
 /* 点阵 SVG 按点数缓存（摇骰动画每秒要重建几十次面，缓存后开销大幅下降，消除点击/摇动时的卡顿） */
+/* R = 点半径：主面（读数面）点大而醒目，侧面点小 */
 var PIPS_HTML = {};
-function pipsSvg(v){
-  if (PIPS_HTML[v]) return PIPS_HTML[v];
+function pipsSvg(v, R){
+  var key = v + '_' + (R || 5.5);
+  if (PIPS_HTML[key]) return PIPS_HTML[key];
   var g = [13,27,41], h = '';
   var fill = (v === 1 || v === 4) ? '#D5240E' : '#173CB5';
-  if (v === 1) h = '<circle cx="27" cy="27" r="9" fill="' + fill + '"/>';
+  var r = R || 5.5;
+  if (v === 1) h = '<circle cx="27" cy="27" r="' + (r * 1.55) + '" fill="' + fill + '"/>';
   else for (var i = 0; i < 9; i++){
     if (PIPS[v].indexOf(i) < 0) continue;
-    h += '<circle cx="' + g[i % 3] + '" cy="' + g[(i / 3) | 0] + '" r="5.5" fill="' + fill + '"/>';
+    h += '<circle cx="' + g[i % 3] + '" cy="' + g[(i / 3) | 0] + '" r="' + r + '" fill="' + fill + '"/>';
   }
-  PIPS_HTML[v] = h;
+  PIPS_HTML[key] = h;
   return h;
 }
 function dieFace(el, tv0, fv){
@@ -2455,7 +2475,10 @@ function dieFace(el, tv0, fv){
   ];
   var h = '<div class="cube" style="transform:rotateZ(' + rz + 'deg) rotateX(-45deg) rotateY(-45deg)">';
   for (var i = 0; i < 6; i++){
-    h += '<div class="dface ' + defs[i][0] + '"><svg viewBox="0 0 54 54">' + pipsSvg(defs[i][1]) + '</svg></div>';
+    /* 主面（正面=点数面）点大且鲜亮，其余五面整体压暗、点缩小 → 一眼认读 */
+    var main = defs[i][0] === 'df-front';
+    h += '<div class="dface ' + defs[i][0] + (main ? '' : ' dim') + '"><svg viewBox="0 0 54 54">' +
+      pipsSvg(defs[i][1], main ? 8.2 : 5) + '</svg></div>';
   }
   el.innerHTML = h + '</div>';
   el._fv = fv;
@@ -3243,61 +3266,24 @@ function paintSpySync(){
   if (!w) return;
   if (!g || g.type !== 'spy'){
     renderGameEntry('spySync', 'spy');
-    w.innerHTML = '<div class="spy-panel"><div class="spy-note">不用再建房间啦 —— 上方点「▶ 开局」，<br>派对里所有人一起玩，词由服务器偷偷发。</div></div>';
+    w.innerHTML = '<div class="spy-panel"><div class="spy-note">上方点「▶ 开局」，词由服务器偷偷发给每个人。</div></div>';
     return;
   }
   var meP = null, isHost = false;
   (g.players || []).forEach(function(p){ if (p.me){ meP = p; isHost = !!p.isHost; } });
-  var meAlive = !!(meP && meP.alive);
+  /* 极简玩法：只发词，不发步骤、不提示流程 —— 描述/投票全靠口头，页面只留看词 + 重新分配 */
   sync.style.display = 'flex';
-  var h = '';
-  if (g.phase === 'words'){
-    sync.innerHTML = '<div class="smsg">🕵 第 1 阶段 · 每个人偷偷看自己的词' + (isHost ? '<span style="color:#7FE3FF;">（你看好了点下面开始）</span>' : '') + '</div>';
-    h += '<div class="spy-panel"><h3>🕵 谁是卧底（' + (g.players || []).length + ' 人）</h3>' + spyChipsP(g) +
-      '<div class="spy-note" style="margin-top:8px;">拿到相同词的是平民，词不一样的那个人是卧底。<br>每人轮流用一句话描述自己的词，不能说出来！</div></div>';
-    h += (meAlive && g.yourWord) ? '<button class="spy-big" id="spySeeWord">👀 查看我的词语</button>' : '<div class="spy-note">等待中…</div>';
-    h += isHost ? spyHostBtn('spyGoTalk', '🗣 大家都看好了，开始描述', 'spyto') : '<div class="spy-note">等房主开始描述…</div>';
-  } else if (g.phase === 'talk'){
-    sync.innerHTML = '<div class="smsg">第 <b>' + (g.round || 1) + '</b> 轮 · 自由描述中' + (isHost ? ' · 描述完点下面投票' : '') + '</div>';
-    h += '<div class="spy-panel"><h3>🗣 第 ' + g.round + ' 轮 · 自由描述</h3>' + spyChipsP(g) +
-      '<div class="spy-note" style="margin-top:8px;">' + (g.tie ? '⚠️ 刚才平票，没人出局，继续描述！<br>' : '') +
-      (g.lastOut ? '上一轮：' + esc(g.lastOut.name) + ' 被投出局，他' + (g.lastOut.wasSpy ? '就是卧底！' : '是平民…') : '每人一句话描述自己的词，说完开始投票') + '</div></div>';
-    h += isHost ? spyHostBtn('spyGoVote', '🗳 描述完了，开始投票', 'spyvote') : '<div class="spy-note">等房主发起投票…</div>';
-  } else if (g.phase === 'vote'){
-    sync.innerHTML = '<div class="smsg">🗳 投票中 · <b>' + (g.votedN || 0) + '</b> / ' + (g.aliveN || 0) + ' 人已投</div>';
-    h += '<div class="spy-panel"><h3>🗳 投票 · 谁最像卧底？（' + (g.aliveN || 0) + ' 人）</h3>' + spyChipsP(g);
-    if (!meAlive) h += '<div class="spy-note" style="margin-top:8px;">你已出局，观战中…</div>';
-    else {
-      h += '<div class="spy-votes">';
-      (g.players || []).forEach(function(p){
-        if (!p.alive || p.me) return;
-        h += '<button class="spy-vote' + (g.myVote === p.pid ? ' mine' : '') + '" data-sv="' + p.pid + '">' + esc(p.name) + '</button>';
-      });
-      h += '</div><div class="spy-note" style="margin-top:10px;">' +
-        (g.myVote ? '你已投票，等其他人…（' + (g.votedN || 0) + '/' + (g.aliveN || 0) + '）' : '点一个人，把他投出去') + '</div>';
-    }
-    h += '</div>';
-  } else if (g.phase === 'result'){
-    var r = g.result || {};
-    sync.innerHTML = '<div class="smsg">' + (r.win === 'good' ? '🎉 平民获胜！卧底被揪出来了' : '🕵️ 卧底获胜！') + '</div>';
-    h += '<div class="spy-panel spy-result"><div class="win">' + (r.win === 'good' ? '🎉 平民获胜！' : '🕵️ 卧底获胜！') + '</div>' +
-      '<div class="spy-note" style="margin-top:10px;">卧底是 <b style="color:#FF8FB0;">' + esc(r.spy || '') + '</b>' +
-      '<br>平民词「' + esc(r.word || '') + '」 · 卧底词「' + esc(r.spyWord || '') + '」</div></div>';
-    h += '<div class="spy-panel"><h3>本局玩家</h3>' + spyChipsP(g) + '</div>';
-    h += isHost ? spyHostBtn('spyAgain', '🔄 再来一局（重新发词）', 'spyagain') : '<div class="spy-note">等房主开下一局…</div>';
-  }
+  sync.innerHTML = '<span class="smsg">🕵 谁是卧底 · ' + (g.players || []).length + ' 人</span>';
+  var h = '<div class="spy-panel"><h3>🕵 谁是卧底（' + (g.players || []).length + ' 人）</h3>' + spyChipsP(g) + '</div>';
+  if (g.yourWord) h += '<button class="spy-big" id="spySeeWord">👀 查看我的词语</button>';
+  h += isHost ? '<button class="spy-big alt" id="spyAgainBtn">🔄 重新分配词语</button>' : '';
   w.innerHTML = h;
-  if (g.phase === 'words' && meAlive && g.yourWord){
-    var see = $('spySeeWord');
-    if (see) see.onclick = function(){ spyWordShow(g.yourWord); };
-  }
-  if (g.phase === 'vote' && meAlive && !g.myVote){
-    Array.prototype.forEach.call(w.querySelectorAll('[data-sv]'), function(btn){
-      btn.onclick = function(){
-        ptAct({ act:'spycast', target:btn.getAttribute('data-sv') }, function(j){ if (!j.ok) toast(j.msg || '投票失败'); });
-      };
-    });
-  }
+  var see = $('spySeeWord');
+  if (see) see.onclick = function(){ spyWordShow(g.yourWord); };
+  var again = $('spyAgainBtn');
+  if (again) again.onclick = function(){
+    ptAct({ act:'spyagain' }, function(j){ if (!j.ok) toast(j.msg || '重新分配失败，再点一次'); });
+  };
 }
 
 /* ================= 手持弹幕 ================= */
@@ -3912,6 +3898,26 @@ window.__E = {
   slotTick: sfxWheelTick,
   slotStop: sfxSlotStop
 };
+})();
+</script>
+<script>
+/* 全局禁用页面滚动手势：手指在空白处拖动不再拉动页面（橡皮筋/回弹全禁）。
+   只有真正可滚动的内部列表（overflow auto/scroll 且内容超高）保留滚动，如弹窗选项列表。 */
+(function(){
+  function scrollable(t){
+    while (t && t.nodeType === 1){
+      if (t.scrollHeight > t.clientHeight + 2){
+        var cs = window.getComputedStyle(t);
+        if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') return true;
+      }
+      t = t.parentNode;
+    }
+    return false;
+  }
+  document.addEventListener('touchmove', function(e){
+    if (!scrollable(e.target)) e.preventDefault();
+  }, { passive:false });
+  document.addEventListener('gesturestart', function(e){ e.preventDefault(); });
 })();
 </script>
 <div class="startgate" id="startGate">
