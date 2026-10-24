@@ -18,9 +18,9 @@
     padding:26px 20px calc(30px + env(safe-area-inset-bottom));
     min-height:100vh; min-height:100dvh;
   }
-  .logo{font-size:13px; letter-spacing:.42em; color:#D6AB54; font-weight:800; margin-top:6px;}
+  .logo{font-size:clamp(22px, 7vw, 30px); letter-spacing:.14em; color:#D6AB54; font-weight:900; margin-top:2px; white-space:nowrap;}
   .logo b{color:#F5EFE6;}
-  h1{margin:14px 0 4px; font-size:27px; letter-spacing:1px; font-weight:900; text-align:center;}
+  h1{margin:10px 0 4px; font-size:clamp(19px, 5.4vw, 24px); letter-spacing:1px; font-weight:900; text-align:center;}
   .sub{margin:0 0 6px; font-size:13px; color:#9A8FA8; text-align:center;}
   .tablebadge{
     display:inline-flex; align-items:center; gap:8px; margin:12px 0 24px;
@@ -120,14 +120,14 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024j·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024m·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
   <div class="toastbox" id="toast"></div>
   <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
 
-<script src="i18n.js?v=1024j"></script>
+<script src="i18n.js?v=1024m"></script>
 <script>
 (function () {
   var tb = document.getElementById('tb');
@@ -160,17 +160,31 @@
     var lm = document.getElementById('lanManual');
     lm.href = LAN_URL + '/' + carry;
     lm.style.display = 'block';
-    /* 探测店里服务可达性：双保险 + 持续重试。
-       【修复·重要竞态】旧版探测只有 3 秒窗口且超时会把"已完成"标志置位 ——
-       手机 WiFi 休眠唤醒后第一个包经常要 1-3 秒+ 才通，探测刚成功就被超时标记丢弃，
-       表现为"时灵时不灵"。现在：每 2 秒重试、最长 20 秒，任何一次成功都立即自动切换；
-       4 秒还没切出去就亮出「点此进入」按钮兜底（探测成功照常自动切）。
-       ① fetch no-cors（网络通即 resolve）② Image 探测真实图片 ping.png（部分 WebView 拦 fetch 不拦图片） */
+    /* ===== 线路探测与切换策略（v1024m 重做）=====
+       【根因】新版 iOS / 微信浏览器把「https 页面偷偷探测 http 内网」一律拦死
+       （混合内容 + Private Network Access），fetch 和 Image 探测全都到不了店里服务
+       → 纯自动探测在现代手机上基本失效，用户表现为「连着 WiFi 扫码也不切极速版」。
+       【新策略】
+       ① 探测继续保留（旧浏览器/安卓部分 WebView 仍有效），2 秒一次 × 20 秒，成功即自动跳；
+       ② 「一键进入店内极速版」按钮不再等 4 秒，进来立刻亮出（探测失败也能一秒点进去）；
+       ③ 记住用过极速版：点过按钮的设备写 localStorage(jl_lan_used, 12 小时有效)，
+          之后再扫码 → 不用探测直接自动跳极速版（常客零操作）；
+          跳失败回到本页 30 秒内不重复自动跳（防循环），手动按钮兜底。 */
     var gone = false;   /* 已经决定切换（防重复跳转） */
     var probeN = 0;
     var bar = document.getElementById('lanbar');
+    var remember = function () { try { localStorage.setItem('jl_lan_used', JSON.stringify({ t: Date.now(), u: LAN_URL })); } catch (e) {} };
+    try {
+      var lu = JSON.parse(localStorage.getItem('jl_lan_used') || '0');
+      var lt = parseInt(localStorage.getItem('jl_lan_try') || '0', 10);
+      if (lu && lu.u === LAN_URL && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000){
+        localStorage.setItem('jl_lan_try', String(Date.now()));
+        location.replace(LAN_URL + '/' + carry);
+      }
+    } catch (e) {}
     var goLan = function () {
       if (gone) return; gone = true;
+      remember();
       bar.style.display = 'block';
       bar.querySelector('.t1').textContent = '⚡ 已连上店里 WiFi · 正在切换极速版…';
       bar.querySelector('.t2').textContent = '桌号自动带上，马上就好';
@@ -185,17 +199,15 @@
         img.src = LAN_URL + '/ping.png?t=' + Date.now() + '&n=' + (++probeN);
       } catch (e) {}
     };
+    /* 手动按钮立即亮出（不再等 4 秒） */
+    bar.style.display = 'block';
+    bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
+    bar.querySelector('.t2').textContent = '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
+    bar.onclick = function () { remember(); location.href = LAN_URL + '/' + carry; };
+    lm.addEventListener('click', remember);
     probeOnce();
     var probeIv = setInterval(probeOnce, 2000);
     setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
-    /* 4 秒还没切出去 → 把横幅变成手动按钮（探测继续，一旦成功仍然自动切） */
-    setTimeout(function () {
-      if (gone) return;
-      bar.style.display = 'block';
-      bar.querySelector('.t1').textContent = '⚡ 点此进入店内极速版';
-      bar.querySelector('.t2').textContent = '店里 WiFi 下快 50 倍 · 自动没切就手动点一下';
-      bar.onclick = function () { location.href = LAN_URL + '/' + carry; };
-    }, 4000);
   }
 
   btnParty.onclick = function () {
