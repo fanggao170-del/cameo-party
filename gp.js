@@ -349,6 +349,8 @@ function actMutator(room, me, b){
   }
   if (act === 'brestart'){
     if (!me.isHost) return fail('只有房主能重新开始');
+    /* 修复：还没开局（或玩的是别的游戏）时点重新开始会凭空开出毒药局 → 必须已有毒药局 */
+    if (!g || g.type !== 'bomb') return fail('还没开局，先点「开局」');
     /* 重新开始：回到第 1 轮全新一盘（保留本桌自定义的图标/数量） */
     var _ic = (g && g.icon) || 'cameo', _sz = (g && g.size) || 16, _cl = (g && g.cols) || 4;
     room.game = { type:'bomb', phase:'set', round:1, size:_sz, cols:_cl, icon:_ic,
