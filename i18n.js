@@ -44,6 +44,8 @@
     '⚡ 已连上店里 WiFi · 进入极速版':'⚡ Store WiFi connected · Enter LAN Fast Mode',
     '店内局域网直连，快 50 倍 · 点一点就切换':'Direct LAN connection, 50× faster · tap to switch',
     '⚡ 点此进入店内极速版':'⚡ Tap to enter LAN Fast Mode',
+    '⚡ 一键进入店内极速版':'⚡ One tap to LAN Fast Mode',
+    '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下':'50× faster on store WiFi · auto-switches if detected, or tap here',
     '店里 WiFi 下快 50 倍 · 自动没切就手动点一下':'50× faster on store WiFi · tap here if it did not switch automatically',
     '⚡ 已连上店里 WiFi · 正在切换极速版…':'⚡ Store WiFi connected · switching to LAN Fast…',
     '桌号自动带上，马上就好':'Your table number is carried over — one moment',
