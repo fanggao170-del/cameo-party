@@ -370,18 +370,6 @@
 
   /* ================= 摇骰子（表情惩罚骰 · 金字塔 3-2-1 · 手滑开盅） ================= */
   .dice-stage{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; align-items:center; position:relative;}
-  /* 摇完的结果横幅（取代原来的真心话大冒险卡片） */
-  .dice-res{
-    position:absolute; left:50%; top:86px; transform:translateX(-50%) scale(.88); z-index:14;
-    min-width:230px; padding:14px 24px; border-radius:22px; text-align:center;
-    background:linear-gradient(180deg,#FFE56A,#F0A93A); color:#4A2600;
-    font-size:20px; font-weight:900; letter-spacing:1px; line-height:1.55; white-space:nowrap;
-    box-shadow:0 12px 26px rgba(0,0,0,.55); opacity:0; pointer-events:none;
-    transition:all .28s cubic-bezier(.2,1.4,.4,1);
-  }
-  .dice-res.on{opacity:1; transform:translateX(-50%) scale(1);}
-  .dice-res b{font-size:25px;}
-  .dice-res span{font-size:28px; letter-spacing:5px;}
   /* 音效语音气泡 */
   .sfx-bubble{
     position:absolute; left:50%; top:16px; transform:translateX(-50%) scale(.9); z-index:15;
@@ -890,7 +878,6 @@
     <div class="syncbar" id="diceSync"></div>
     <div class="dice-stage">
       <div class="sfx-bubble" id="sfxBubble"></div>
-      <div class="dice-res" id="diceRes"></div>
       <div class="cupzone" id="cupZone">
         <div class="tray3d"></div>        <div class="diceline" id="diceLine">
           <div class="die3d"></div><div class="die3d"></div><div class="die3d"></div><div class="die3d"></div><div class="die3d"></div>
@@ -1122,10 +1109,10 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="i18n.js?v=1024n"></script>
-<script src="gp.js?v=1024n"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024n</div>
-<script>try{document.getElementById('verBadge').textContent='v1024n·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="i18n.js?v=1024o"></script>
+<script src="gp.js?v=1024o"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024o</div>
+<script>try{document.getElementById('verBadge').textContent='v1024o·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -3022,7 +3009,7 @@ $('rollBtn').addEventListener('click', function(){
       D.busy = false;
       cup.classList.add('swipeable');
       $('cupHint').classList.add('on');
-      toast('拖住骰盅看点数');
+      /* 不再弹 toast 提示（画面上已有「↑ 上滑开盅」角标） */
     }, 1250);
   }, 300);
 });
@@ -3159,21 +3146,11 @@ function settleDice(D){
     if (S.me && loser.who === S.me.name) addCup();
     D.order = []; D.rolls = null;
     D.busy = false;
-    /* 只公布最小点数，不点名（用户要求：摇完不提示谁摇了多少点） */
-    toast('🎲 最小 ' + min + ' 点 · 喝！');
-    showDiceRes(min);
+    /* 不做任何结算显示（用户要求：摇完骰子不需要任何提示，点数自己看） */
   } else {
     nextPlayer();
     D.busy = false;
   }
-}
-function showDiceRes(min){
-  var el = $('diceRes');
-  if (!el) return;
-  el.innerHTML = '🎲 最小 <b>' + min + '</b> 点<br><span>喝！</span>';
-  el.classList.add('on');
-  clearTimeout(showDiceRes._h);
-  showDiceRes._h = setTimeout(function(){ el.classList.remove('on'); }, 2800);
 }
 
 /* ===== 摇一摇手机摇骰（iOS 13+ 需要授权：第一次点「摇」时顺带申请） =====
