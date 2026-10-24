@@ -324,7 +324,7 @@ function partyGamePub(room, pid){
   return out;
 }
 function partyView(room, pid){
-  return { ok: true, table: room.table,
+  return { ok: true, table: room.table, rev: room.rev || 0,
     members: room.members.map(function(x){ return { pid: x.pid, uid: x.uid, name: x.name, avatar: x.avatar, isHost: x.isHost, me: x.pid === pid }; }),
     game: partyGamePub(room, pid),
     records: room.records };
@@ -396,7 +396,7 @@ function actMutator(room, me, b){
       g.turn = room.members.some(function(m){ return m.pid === g.boomedPid; }) ? g.boomedPid : partyFirst(room);
       return done();
     }
-    return fail('无效操作');
+    return fail('手慢一步，桌面刚更新，请再点一次');
   }
   if (g.type === 'wheel'){
     if (act === 'spin' && g.phase === 'ready'){
@@ -440,7 +440,7 @@ function actMutator(room, me, b){
       if (!again) g.turn = partyNextPid(room, g.spinnerPid || me.pid);
       return done();
     }
-    return fail('无效操作');
+    return fail('手慢一步，桌面刚更新，请再点一次');
   }
   if (g.type === 'dice'){
     if (act === 'shake' && g.phase === 'play'){
@@ -457,7 +457,7 @@ function actMutator(room, me, b){
       room.game = { type:'dice', phase:'play', count:g.count, hands:{} };
       return done();
     }
-    return fail('无效操作');
+    return fail('手慢一步，桌面刚更新，请再点一次');
   }
   if (g.type === 'spy'){
     var isHost = !!me.isHost;
@@ -515,9 +515,9 @@ function actMutator(room, me, b){
         spyPid:spyM3.pid, out:[], votes:{}, tie:false, lastOut:null, result:null });
       return done();
     }
-    return fail('无效操作');
+    return fail('手慢一步，桌面刚更新，请再点一次');
   }
-  return fail('无效操作');
+  return fail('手慢一步，桌面刚更新，请再点一次');
 }
 
 /* ===== 对外 API（形状与原服务端一致） ===== */
@@ -611,6 +611,14 @@ var GPApi = {
         if (!r.ok) return { ok:false, msg: r.msg || '操作失败' };
         var resp = { ok: true };
         if (r.out) Object.keys(r.out).forEach(function(k){ resp[k] = r.out[k]; });
+        /* 成功时带回最新房间视图：本地立即应用，不等下一次轮询（修复"点了要等1秒才有反应"） */
+        var c = memCache[e.p];
+        if (c && c.data && c.data.members){
+          try {
+            var v = partyView(JSON.parse(JSON.stringify(c.data)), b.pid);
+            resp.table = v.table; resp.members = v.members; resp.game = v.game; resp.records = v.records;
+          } catch(err){}
+        }
         return resp;
       });
     });
@@ -664,6 +672,7 @@ var GPApi = {
   },
 
   /* 诊断信息（控制台用） */
+  isLan: function(){ return !API; },
   dbg: function(){ return { rateLeft: rateLeft, tables: idxMem.tables, repo: DATA_REPO }; }
 };
 
