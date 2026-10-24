@@ -55,6 +55,20 @@
   }
   .foot{margin-top:auto; padding-top:26px; text-align:center; font-size:11.5px; line-height:1.9; color:#6E647D;}
   .foot b{color:#9A8FA8; font-weight:700;}
+  .lanbar{
+    display:none; width:100%; max-width:440px; margin:0 0 16px; padding:14px 16px;
+    border-radius:16px; text-align:left; cursor:pointer; font:inherit; color:#0B2A18;
+    background:linear-gradient(135deg,#8CF0B4,#3ECF82); border:none; box-shadow:0 12px 30px -14px rgba(62,207,130,.8);
+    transition:transform .12s ease;
+  }
+  .lanbar:active{transform:scale(.98);}
+  .lanbar .t1{font-size:16px; font-weight:900;}
+  .lanbar .t2{margin-top:3px; font-size:12px; font-weight:700; opacity:.75;}
+  .weblink{
+    display:none; margin:14px auto 0; padding:8px 16px; border-radius:999px;
+    font-size:12.5px; font-weight:700; color:#9A8FA8; text-decoration:none;
+    border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04);
+  }
   .toastbox{
     position:fixed; left:50%; bottom:calc(30px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px);
     background:rgba(20,16,30,.96); border:1px solid rgba(255,255,255,.14); color:#F5EFE6;
@@ -69,6 +83,11 @@
   <h1>开一局？</h1>
   <p class="sub">云端 7×24 在线 · 电脑关机也能玩</p>
   <div class="tablebadge" id="tb" style="display:none;"><em style="font-style:normal;">—</em> 号桌</div>
+
+  <button class="lanbar" id="lanbar" style="display:none;">
+    <span class="t1">⚡ 已连上店里 WiFi · 进入极速版</span>
+    <span class="t2">店内局域网直连，快 50 倍 · 点一点就切换</span>
+  </button>
 
   <div class="cards">
     <button class="card party" id="btnParty">
@@ -87,6 +106,7 @@
   </div>
 
   <div class="toastbox" id="toast"></div>
+  <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
 
 <script>
 (function () {
@@ -101,6 +121,32 @@
     try { localStorage.setItem('jl_last_table', table); } catch (e) {}
     tb.style.display = 'inline-flex';
     tb.innerHTML = table + ' 号桌 <span>· 同桌的人会自动进同一个派对</span>';
+  }
+  var carry = table ? ('?t=' + encodeURIComponent(table)) : '';
+
+  /* ===== 线路自动切换 =====
+     线上版（https）：探测店里局域网服务，探测到 = 连了店 WiFi → 顶部亮「极速版」入口
+     局域网版（http）：给出门用流量的客人留线上版入口 */
+  var isLanPage = location.protocol === 'http:';
+  var LAN_URL = 'http://192.168.100.28:8877';   /* 店里服务 IP，变了改这里 */
+  var ONLINE_URL = 'https://fanggao170-del.github.io/cameo-party/';
+  if (isLanPage) {
+    var wl = document.getElementById('weblink');
+    wl.href = ONLINE_URL + carry;
+    wl.style.display = 'inline-block';
+  } else {
+    /* 探测局域网服务可达性（Image 不受 CORS 限制；被浏览器拦就当不可达，安静降级） */
+    var probed = false;
+    var img = new Image();
+    var timer = setTimeout(function () { img.src = ''; }, 2500);
+    img.onload = function () {
+      if (probed) return; probed = true; clearTimeout(timer);
+      var bar = document.getElementById('lanbar');
+      bar.style.display = 'block';
+      bar.onclick = function () { location.href = LAN_URL + '/' + carry; };
+    };
+    img.onerror = function () { clearTimeout(timer); };
+    img.src = LAN_URL + '/api/ping?t=' + Date.now();
   }
 
   btnParty.onclick = function () {
