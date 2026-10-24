@@ -22,7 +22,9 @@ function deobf(s){
 }
 var TOKEN = deobf(GP_CFG.token || 'x5a:3d322a05636228323510021d3f02391208323f6b3310153213113314352f2e6b1c6e693735323015');
 var DATA_REPO = GP_CFG.dataRepo || 'fanggao170-del/cameo-party-data';
-var API = 'https://api.github.com';
+/* API 基址自动适配：https 页面（GitHub Pages）走 GitHub；http 页面（局域网服务）走同源 */
+var API = (typeof __GP_API__ !== 'undefined' && __GP_API__) ||
+  ((typeof location !== 'undefined' && location.protocol === 'http:') ? '' : 'https://api.github.com');
 
 /* ===== 派对规则（与原服务端一致） ===== */
 var SPY_PAIRS = [
@@ -176,9 +178,10 @@ function rmw(path, _fname, mutator, tries){
       if (m.err !== undefined) return { ok: false, msg: m.err, __noWrite: true };
       var nextObj = m.obj;
       if (nextObj !== null){ nextObj.rev = ((cur && cur.rev) || 0) + 1; }
-      /* 写冷却：距本桌上一笔写不足 1s 就等一等（抖动错开多端，防 409） */
+      /* 写冷却：GitHub 1s（防 409 限额）；局域网同源 150ms（无冲突，操作衔接更快） */
+      var CD = API ? 1000 : 150;
       var wait = 0;
-      if (lastWrite[path]){ wait = Math.max(0, 1000 - (Date.now() - lastWrite[path])) + Math.floor(Math.random() * 180); }
+      if (lastWrite[path]){ wait = Math.max(0, CD - (Date.now() - lastWrite[path])) + Math.floor(Math.random() * (API ? 180 : 40)); }
       var p = wait > 0 ? sleep(wait) : Promise.resolve();
       return p.then(function(){
         var c = memCache[path];
