@@ -2305,8 +2305,9 @@ function paintWheelSync(){
   } else if (g.phase === 'result'){
     var act = WSEG[g.actionIdx] ? WSEG[g.actionIdx].t : '';
     sync.innerHTML = '<div class="smsg">🎯 <b>' + esc(g.personName || '') + '</b> → <b>' + esc(act) + '</b>' +
-      (g.isMyTurn ? '<span style="color:#7FE3FF;">（点下面进下一轮）</span>' : '') + '</div>';
-    $('spinBtn').textContent = '下一轮 →';
+      (g.isMyTurn ? '<span style="color:#7FE3FF;">（再点一下继续转）</span>' : '') + '</div>';
+    /* 转完再点即继续转（result 分支的 spinWheel 会自动推进回合并开转） */
+    $('spinBtn').textContent = g.isMyTurn ? '开始转动！' : '等 ' + (g.turnName || '') + ' 转…';
     /* 每次转动（服务端 seq 自增）只播一次动画；后进房间的人也要补动画 */
     if (PT.animKey !== 'w' + g.seq){
       PT.animKey = 'w' + g.seq;
@@ -2319,7 +2320,14 @@ function spinWheel(){
   /* ===== 派对同步：轮流转，结果由服务端统一随机，全桌一致 ===== */
   if (ptSync() && PT.game && PT.game.type === 'wheel'){
     var pg = PT.game;
-    if (pg.phase === 'result'){ ptAct({ act:'next' }, function(j){ if (!j.ok) toast(j.msg || ''); }); return; }
+    if (pg.phase === 'result'){
+      /* 转完直接再点就继续转：推进回合后轮到谁，谁立即开转（不用单独点「下一轮」） */
+      ptAct({ act:'next' }, function(j){
+        if (!j.ok){ toast(j.msg || ''); return }
+        if (PT.game && PT.game.type === 'wheel' && PT.game.phase === 'ready' && PT.game.isMyTurn) spinWheel();
+      });
+      return;
+    }
     if (pg.phase === 'choose'){
       /* 有别人可点 → 点上方头像；没有别人 → 放弃指定自己喝（服务端兜底） */
       var hasOther = false;
