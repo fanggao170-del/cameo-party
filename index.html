@@ -49,6 +49,8 @@
     border-color:rgba(214,171,84,.55); box-shadow:0 14px 34px -18px rgba(214,171,84,.75);
   }
   .card.party .ico{background:linear-gradient(140deg,#F0C86B,#B4762C); color:#2A1B06; box-shadow:0 8px 18px -10px rgba(240,200,107,.9);}
+  .card.song{border-color:rgba(255,215,94,.4); background:rgba(255,215,94,.07);}
+  .card.song .ico{background:linear-gradient(140deg,#FFE08A,#E8A93A); color:#4A3006; box-shadow:0 8px 18px -10px rgba(255,224,138,.8);}
   .tag{
     font-size:10.5px; font-weight:900; padding:2px 7px; border-radius:999px; letter-spacing:.04em;
     background:rgba(120,220,150,.16); color:#7EE3A2; border:1px solid rgba(120,220,150,.35);
@@ -98,12 +100,21 @@
       </span>
       <span class="arrow">›</span>
     </button>
+
+    <button class="card song" id="btnSong">
+      <span class="ico">🎵</span>
+      <span class="txt">
+        <span class="t1">扫码点歌</span>
+        <span class="t2">搜歌点播 · 生日祝福 · 大屏秒上屏</span>
+      </span>
+      <span class="arrow">›</span>
+    </button>
   </div>
 
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024f·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024h·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
@@ -183,6 +194,20 @@
   btnParty.onclick = function () {
     var q = table ? ('?t=' + encodeURIComponent(table) + '&join=1') : '';
     location.href = './game.html' + q;
+  };
+
+  /* 扫码点歌：店内 → 点歌台（与派对同一个服务 /song）；线上 → 先探测店里服务可达再带桌号跳过去 */
+  var btnSong = document.getElementById('btnSong');
+  btnSong.onclick = function () {
+    var target = LAN_URL + '/song' + carry;
+    if (isLanPage) { location.href = '/song' + carry; return; }
+    /* https 页面顶层跳转 http 不被拦；先探测店里服务在不在线，避免点了看到裸错误页 */
+    var img = new Image();
+    img.onload = function () { location.href = target; };
+    img.onerror = function () {
+      toast('没连上店里服务 · 连上店内 WiFi 后再点');
+    };
+    img.src = LAN_URL + '/ping.png?t=' + Date.now();
   };
 })();
 </script>
