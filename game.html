@@ -324,11 +324,11 @@
   .lockband{flex:none; font-size:15px; color:#8E7CB0; font-weight:700; letter-spacing:1px; margin-top:10px; text-align:center;}
 
   /* ================= 轮盘（照参考图复刻 · 贴满屏宽） ================= */
+  /* 禁止滚动：之前 overflow-y:auto 允许上下滑，开局前滑动会把轮盘推出边界 → 改为锁死，
+     矮屏由 media query 缩小轮盘保证按钮可见 */
   .wheel-stage{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:space-between;
-    margin-left:-18px; margin-right:-18px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    margin-left:-18px; margin-right:-18px; overflow:hidden; touch-action:none;
     scrollbar-width:none;}
-  .wheel-stage::-webkit-scrollbar{display:none;}
-  /* 玩法大轮盘改回满屏宽（之前贴边的大小），下方再放小号"人的轮盘"，超出可滚动 */
   .wheelwrap{flex:none; position:relative; width:100%; aspect-ratio:1/1; height:auto; margin-top:2px; margin-bottom:88px;}
   .wheel{
     width:100%; height:100%; border-radius:50%; position:relative; overflow:hidden;
@@ -706,6 +706,9 @@
     .cup-hint{bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 134px);}
     .rollorb{height:72px; font-size:25px; padding:0 26px;}
     .amborb{width:72px; height:72px; font-size:28px;}
+    /* 矮屏：轮盘按剩余高度缩小（宽度=高度），保证指针胶囊和开始按钮都看得到 */
+    .wheelwrap{width:clamp(240px, calc(100dvh - 360px), 100%); margin-bottom:74px;}
+    .wheel-cap{bottom:-60px;}
     .spy-big{height:50px; font-size:19px;}
   }
 </style>
@@ -873,7 +876,10 @@
         <div class="wheel" id="wheelEl"></div>
         <div class="wheel-cap" id="wheelCap">大冒险</div>
       </div>
-      <button class="btn big" id="spinBtn">开始转动！</button>
+      <div class="rollrow" style="width:100%; padding:0;">
+        <button class="amborb" id="ambBtn3" aria-label="氛围音效">🎉</button>
+        <button class="btn big" id="spinBtn" style="flex:1; width:auto;">开始转动！</button>
+      </div>
     </div>
   </div>
 
@@ -1119,10 +1125,10 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="i18n.js?v=1024j"></script>
-<script src="gp.js?v=1024j"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024j</div>
-<script>try{document.getElementById('verBadge').textContent='v1024j·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="i18n.js?v=1024k"></script>
+<script src="gp.js?v=1024k"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024k</div>
+<script>try{document.getElementById('verBadge').textContent='v1024k·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -1317,7 +1323,7 @@ var PT = { table:null, pid:null, members:[], game:null, records:{}, timer:null, 
   lastRolls:null, selfActT:0, qTable:null, opening:false,
   myRolls:null, cupOpen:false, shakeBusy:false, rollSeq:0, paintedKey:null, animKey:null,
   flipBusy:false, spinH:null, shakeAnimDone:false, shakeRollsIn:false, shakeFailMsg:null,
-  gameEpoch:0, bombRK:null, stateRev:0 };
+  gameEpoch:0, bombRK:null, boomSfxKey:null, stateRev:0 };
 /* 门店网络模式：'store' = 店内 WiFi（可点歌 + 同桌联机） / 'solo' = 手机流量（只能单人玩）
    null = 还没判定完（先按联机处理，判定为 solo 后再收回） */
 var NET_MODE = null;
@@ -1390,7 +1396,7 @@ function ptClear(msg){
   PT.pid = null; PT.table = null; PT.members = []; PT.game = null; PT.records = {};
   PT.myRolls = null; PT.cupOpen = false; PT.shakeBusy = false; PT.rollSeq = 0; PT.paintedKey = null; PT.animKey = null;
   PT.flipBusy = false; PT.spinH = null; PT.shakeAnimDone = false; PT.shakeRollsIn = false; PT.shakeFailMsg = null;
-  PT.gameEpoch = 0; PT.bombRK = null; PT.stateRev = 0;
+  PT.gameEpoch = 0; PT.bombRK = null; PT.boomSfxKey = null; PT.stateRev = 0;
   ptSave(); paintPartyBar();
   if (msg) toast(msg);
   var scr = document.querySelector('.screen.on');
@@ -1919,7 +1925,13 @@ function paintBomb(){
 function paintBombSync(){
   var g = PT.game;
   var sync = $('bombSync');
-  if (!g || g.type !== 'bomb'){ renderGameEntry('bombSync', 'bomb'); return; }
+  if (!g || g.type !== 'bomb'){
+    /* 还没开局 / 在玩别的游戏：藏掉单机按钮（尤其「重新开始」，防止没开局就能点） */
+    $('wpIconBtn').style.display = 'none';
+    $('wpSizeBtn').style.display = 'none';
+    $('bombRestartBtn').style.display = 'none';
+    renderGameEntry('bombSync', 'bomb'); return;
+  }
   sync.style.display = 'flex';
   /* 轮到谁设毒药要醒目提示：轮到你自己 → 大字「请设置毒药」 */
   if (g.phase === 'set' && g.isMyTurn){
@@ -1971,6 +1983,9 @@ function paintBombSync(){
     else { kj.classList.remove('opened'); kj.innerHTML = wpFront(j, g.icon); }
   }
   if (g.phase === 'boom'){
+    /* 中毒音效：同一局中毒只响一次（按 纪元+轮数+中毒卡 打点，轮询重绘不重复播） */
+    var bk = (PT.gameEpoch || 0) + '_' + (g.round || 1) + '_' + g.boomedIdx;
+    if (PT.boomSfxKey !== bk){ PT.boomSfxKey = bk; sfxBoom(); }
     var boomer = null;
     for (var k = 0; k < PT.members.length; k++) if (PT.members[k].pid === g.boomedPid) boomer = PT.members[k].name;
     $('boomWho').textContent = (boomer || '有人') + ' 吃下了毒药，愿赌服输～';
@@ -2081,6 +2096,9 @@ $('wpGrid').addEventListener('click', function(e){
           PT.game.phase = 'boom';
           PT.game.boomedIdx = i;
           PT.game.boomedPid = PT.pid;
+          /* 先打点再响，paintBombSync 轮询到同一 boom 时不会重复播 */
+          PT.boomSfxKey = (PT.gameEpoch || 0) + '_' + (PT.game.round || 1) + '_' + i;
+          sfxBoom();
           paintBombSync();
         } else {
           /* 状态已即时应用，但此刻卡还在 700ms 动画保护期内 → 动画结束后补一次重绘，标上 opened */
@@ -2115,6 +2133,7 @@ $('wpGrid').addEventListener('click', function(e){
       var st = meStats();
       if (st){ st.bombRounds++; st.bombBooms++; }
       addGame(false);
+      sfxBoom();   /* 中毒爆发音效（单机） */
       $('boomWho').textContent = curName() + ' 吃下了毒药，愿赌服输～';
       $('boomWrap').classList.add('on');
     }, 720);
@@ -2708,6 +2727,45 @@ function sfxPoisonSynth(){   /* 回退：WebAudio 合成的咕噜冒泡 */
     }
   } catch(e){}
 }
+/* ===== 中毒爆发音效：sfx/boom.wav（翻到毒药瞬间：低音爆响 + 噪声冲击 + 下坠哀鸣 + 结尾咕咚），缺文件回退合成爆响 ===== */
+function sfxBoom(){
+  sfxShow('☠️ 中毒了！');
+  try {
+    var a = _sfxCache['boom'];
+    if (!a){
+      a = new Audio('sfx/boom.wav');
+      a.preload = 'auto'; a.volume = 1;
+      a.onerror = function(){ delete _sfxCache['boom']; sfxBoomSynth(); };
+      _sfxCache['boom'] = a;
+    }
+    a.currentTime = 0;
+    var p = a.play();
+    if (p && p.catch) p.catch(function(){ sfxBoomSynth(); });
+  } catch(e){ sfxBoomSynth(); }
+}
+function sfxBoomSynth(){   /* 回退：WebAudio 合成的低音爆响 + 下坠 */
+  try {
+    var ac = slotAC(), t0 = ac.currentTime;
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t0);
+    o.frequency.exponentialRampToValueAtTime(42, t0 + 0.35);
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.exponentialRampToValueAtTime(0.55, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + 0.95);
+    var o2 = ac.createOscillator(), g2 = ac.createGain();
+    o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(440, t0 + 0.06);
+    o2.frequency.exponentialRampToValueAtTime(180, t0 + 0.9);
+    g2.gain.setValueAtTime(0.001, t0 + 0.06);
+    g2.gain.exponentialRampToValueAtTime(0.16, t0 + 0.1);
+    g2.gain.exponentialRampToValueAtTime(0.001, t0 + 1.0);
+    o2.connect(g2); g2.connect(ac.destination);
+    o2.start(t0 + 0.06); o2.stop(t0 + 1.05);
+  } catch(e){}
+}
 /* ===== 老虎机音效（天命轮盘专用）：拉杆 → 逐格咔哒（跟转盘动画同步） → 落定叮当 ===== */
 var _slotAC = null;
 function slotAC(){
@@ -2797,6 +2855,13 @@ function sfxPreload(){
     pw.load();
     _sfxCache['poison'] = pw;
   } catch(e){}
+  try {   /* 中毒爆发音效 wav，单独预载 */
+    var bw = new Audio('sfx/boom.wav');
+    bw.preload = 'auto'; bw.volume = 1;
+    bw.onerror = function(){ delete _sfxCache['boom']; };
+    bw.load();
+    _sfxCache['boom'] = bw;
+  } catch(e){}
 }
 /* 翻牌音效（女巫的毒药点卡牌时） */
 function playFlip(){ sfxPlay(FLIP_OPTS.filter(function(x){ return x.k === curFlipSfx; })[0] || FLIP_OPTS[0]); }
@@ -2837,6 +2902,7 @@ function openSfx(mode){
 }
 $('ambBtn').addEventListener('click', function(){ openSfx('amb'); });
 $('ambBtn2').addEventListener('click', function(){ openSfx('amb'); });
+$('ambBtn3').addEventListener('click', function(){ openSfx('amb'); });
 $('flipSfxBtn').addEventListener('click', function(){ openSfx('flip'); });
 $('sfxDone').addEventListener('click', function(){ $('sfxMask').classList.remove('on'); });
 /* 点弹窗外的暗处也能关掉（以前只有「好了」能关，被挤出屏幕就整个卡死） */
