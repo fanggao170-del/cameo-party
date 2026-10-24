@@ -706,9 +706,6 @@
     .cup-hint{bottom:calc(clamp(280px, calc(100dvh - 330px), 360px) - 134px);}
     .rollorb{height:72px; font-size:25px; padding:0 26px;}
     .amborb{width:72px; height:72px; font-size:28px;}
-    /* 矮屏：轮盘按剩余高度缩小（宽度=高度），保证指针胶囊和开始按钮都看得到 */
-    .wheelwrap{width:clamp(240px, calc(100dvh - 360px), 100%); margin-bottom:74px;}
-    .wheel-cap{bottom:-60px;}
     .spy-big{height:50px; font-size:19px;}
   }
 </style>
@@ -876,7 +873,7 @@
         <div class="wheel" id="wheelEl"></div>
         <div class="wheel-cap" id="wheelCap">大冒险</div>
       </div>
-      <div class="rollrow" style="width:100%; padding:0;">
+      <div class="rollrow" id="wheelBtnRow" style="width:100%; padding:0;">
         <button class="amborb" id="ambBtn3" aria-label="氛围音效">🎉</button>
         <button class="btn big" id="spinBtn" style="flex:1; width:auto;">开始转动！</button>
       </div>
@@ -1125,10 +1122,10 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="i18n.js?v=1024l"></script>
-<script src="gp.js?v=1024l"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024l</div>
-<script>try{document.getElementById('verBadge').textContent='v1024l·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="i18n.js?v=1024m"></script>
+<script src="gp.js?v=1024m"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024m</div>
+<script>try{document.getElementById('verBadge').textContent='v1024m·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -1549,6 +1546,7 @@ function renderGameEntry(syncId, kind){
   if (kind === 'spy' && !g && PT.members.length < 3) msg = '本局 ' + PT.members.length + ' 人 · 谁是卧底至少要 3 人，先邀请伙伴';
   el.innerHTML = '<div class="smsg">' + msg + partyRosterHtml() + '</div>' +
     '<button class="btn small" data-sst="' + kind + '">▶ 开局</button>';
+  if (kind === 'wheel') sizeWheel();   /* 同步栏高度变了 → 轮盘直径重算（sizeWheel 自带 on 屏守卫） */
 }
 /* 开局 / 下一轮 / 再来一场 统一按钮 */
 document.addEventListener('click', function(e){
@@ -1580,7 +1578,7 @@ function ptApplyGame(prev, g){
   if (!prev !== !g || (prev && g && prev.type !== g.type)){ PT.gameEpoch = (PT.gameEpoch || 0) + 1; }   /* 换游戏实例 → 界面纪元 +1 */
   var gType = g ? g.type : null;
   if (scr === 'bomb') paintBombSync();
-  else if (scr === 'wheel') paintWheelSync();
+  else if (scr === 'wheel'){ paintWheelSync(); sizeWheel(); }
   else if (scr === 'spy') paintSpySync();
   else if (scr === 'dice') paintDiceSync();   /* 大话骰：各摇各的，无跨机动画 */
   updateStartGate();   /* 开局/结束/换游戏时刷新门禁遮罩 */
@@ -1635,6 +1633,7 @@ function showScreen(id){
     buildWheel();
     if (ptSync()) paintWheelSync();
     else { $('wheelSync').style.display = 'none'; }
+    sizeWheel();
   }
   if (id === 'dice'){
     paintDice();
@@ -2288,7 +2287,24 @@ function runSpin(el, start, delta, T, done){
     cancel: function(){ if (doneFlag) return; doneFlag = true; if (iv){ clearInterval(iv); iv = null; } }
   };
 }
+/* 轮盘直径 = min(可用宽度, 轮盘区剩余高度 - 指针胶囊占位)；wrap 尺寸由 JS 内联控制 */
+function sizeWheel(){
+  var scr = $('wheel');
+  if (!scr || !scr.classList.contains('on')) return;
+  var stage = scr.querySelector('.wheel-stage');
+  var wrap = $('wheelWrap'), row = $('wheelBtnRow');
+  if (!stage || !wrap || !row) return;
+  var avail = stage.clientHeight - row.offsetHeight - 96;   /* 96 = 指针胶囊(74) + 余量 */
+  var s = Math.max(210, Math.min(stage.clientWidth, avail));
+  wrap.style.width = s + 'px';
+  wrap.style.height = s + 'px';
+}
+window.addEventListener('resize', sizeWheel);
 function buildWheel(){
+  /* 轮盘自适应尺寸：同步栏（开局提示/头像行）高度不定 → JS 按「轮盘区剩余高度」算直径，
+     保证指针胶囊 + 底部「开始转动/氛围音效」按钮永远在屏内。
+     【修复】同步栏内容高时轮盘把按钮顶出屏（overflow:hidden 后直接被裁掉看不到） */
+  sizeWheel();
   var n = WSEG.length, step = 360 / n;
   var segs = '';
   for (var i = 0; i < n; i++){
