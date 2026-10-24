@@ -71,6 +71,13 @@
   .me-card .me-name{font-size:14px; font-weight:900; letter-spacing:.5px;}
   .me-card .me-cups{font-size:12px; color:#B9A8D8; font-weight:800;}
   .topbar .hb-ico{margin-left:auto; font-size:22px; cursor:pointer; filter:drop-shadow(0 0 8px rgba(255,93,158,.5));}
+  /* 中英文切换按钮：跟在 hb-ico 后面 */
+  .langbtn{
+    flex:none; width:38px; height:26px; margin-left:8px; border-radius:999px; cursor:pointer;
+    border:1.5px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); color:#F5EFFA;
+    font-size:12.5px; font-weight:900; letter-spacing:1px; font-family:inherit; padding:0;
+  }
+  .langbtn:active{transform:scale(.94);}
   .logo{flex:none; text-align:center; margin-bottom:6px;}
   .logo h1{
     font-size:33px; font-weight:900; letter-spacing:2px; margin-top:2px; white-space:nowrap;
@@ -418,6 +425,7 @@
   .die3d{width:36px; height:36px; position:absolute; z-index:1; perspective:400px;}
   .die3d .cube{position:relative; width:100%; height:100%; transform-style:preserve-3d;}
   .dface{position:absolute; left:0; top:0; width:100%; height:100%; border-radius:7px; box-shadow:inset 0 0 5px rgba(0,10,40,.08);}
+  .dface:not(.dim){box-shadow:none;}   /* 朝上的主面：无任何阴影，最亮最清楚 */
   .dface svg{width:100%; height:100%; display:block;}
   /* 侧面压暗：主面（点数面）保持雪白鲜亮，一眼认读 */
   .dface.dim{filter:brightness(.58) saturate(.85);}
@@ -714,6 +722,7 @@
         <span class="me-cups" id="meCups"></span>
       </div>
       <span class="hb-ico" id="heartIco" title="夜店模式">💫</span>
+      <button class="langbtn" type="button" aria-label="Switch language">EN</button>
     </div>
     <div class="logo">
       <h1>CAMEO酒令派对</h1>
@@ -1110,9 +1119,10 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="gp.js?v=1024i"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024i</div>
-<script>try{document.getElementById('verBadge').textContent='v1024i·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<script src="i18n.js?v=1024j"></script>
+<script src="gp.js?v=1024j"></script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024j</div>
+<script>try{document.getElementById('verBadge').textContent='v1024j·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -2484,8 +2494,8 @@ function dieFace(el, tv0, fv){
   ];
   var h = '<div class="cube" style="transform:rotateZ(' + rz + 'deg) rotateX(-45deg) rotateY(-45deg)">';
   for (var i = 0; i < 6; i++){
-    /* 主面（正面=点数面）点大且鲜亮，其余五面整体压暗、点缩小 → 一眼认读 */
-    var main = defs[i][0] === 'df-front';
+    /* 主面 = 朝上的顶面（像真骰子一样读"朝上"的面）：无阴影点大鲜亮；其余五面压暗做阴影 */
+    var main = defs[i][0] === 'df-top';
     h += '<div class="dface ' + defs[i][0] + (main ? '' : ' dim') + '"><svg viewBox="0 0 54 54">' +
       pipsSvg(defs[i][1], main ? 8.2 : 5) + '</svg></div>';
   }
