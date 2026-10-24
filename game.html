@@ -397,7 +397,7 @@
   .sfx-list.amb .sfx-opt .se{font-size:32px;}
   .sfx-list.amb .sfx-opt .st b{font-size:16px;}
   .sfx-list.amb .sfx-opt .st i{display:none;}
-  .cupzone{flex:none; position:relative; width:100%; height:420px; margin-top:0;}
+  .cupzone{flex:none; position:relative; width:100%; height:420px; margin-top:0; touch-action:none; -webkit-user-select:none; user-select:none;}
   .zoneShake{animation:cupShake .13s linear infinite;}
   @keyframes cupShake{
     0%{transform:translate(0,0) rotate(0)}
@@ -1082,8 +1082,8 @@
 </div>
 
 <script src="gp.js?v=1024b"></script>
-<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024b</div>
-<script>try{document.getElementById('verBadge').textContent='v1024b·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
+<div id="verBadge" style="position:fixed;right:8px;bottom:calc(5px + env(safe-area-inset-bottom));font-size:10px;color:rgba(255,255,255,.32);z-index:5;pointer-events:none;letter-spacing:.5px;">v1024c</div>
+<script>try{document.getElementById('verBadge').textContent='v1024c·'+(location.protocol==='http:'?'店里极速':'云端');}catch(e){}</script>
 <script>
 (function(){
 'use strict';
@@ -1958,6 +1958,7 @@ $('wpOkBtn').addEventListener('click', function(){
     var pidx = S.bomb.pending;
     S.bomb.pending = -1; S.bomb.pendingEl = null;
     if (b) wpFlipCardBack(b);
+    sfxPoison();   /* 下毒独特音效 */
     ptAct({ act:'set', index:pidx }, function(j){
       if (!j.ok){ toast(j.msg || '设置失败'); return }
       toast('毒药已设置，传给下一位！');
@@ -1969,6 +1970,7 @@ $('wpOkBtn').addEventListener('click', function(){
   S.bomb.clicked = [];
   S.bomb.mode = 'guess';
   wpFlipCardBack(b);
+  sfxPoison();   /* 下毒独特音效（单机） */
   nextPlayer();
   paintBomb();
   toast('毒药设置成功，传给下一位！');
@@ -2604,6 +2606,47 @@ function sfxDiceReal(){
     if (p && p.catch) p.catch(function(){ sfxDiceShake(); });
   } catch(e){ sfxDiceShake(); }
 }
+/* ===== 毒药独特音效：sfx/poison.wav（女巫设毒专用：低音阴森滑落 + 药水冒泡 + 结尾咕咚），缺文件回退合成咕噜声 ===== */
+function sfxPoison(){
+  sfxShow('🧪 咕噜…咕噜…');
+  try {
+    var a = _sfxCache['poison'];
+    if (!a){
+      a = new Audio('sfx/poison.wav');
+      a.preload = 'auto'; a.volume = 1;
+      a.onerror = function(){ delete _sfxCache['poison']; sfxPoisonSynth(); };
+      _sfxCache['poison'] = a;
+    }
+    a.currentTime = 0;
+    var p = a.play();
+    if (p && p.catch) p.catch(function(){ sfxPoisonSynth(); });
+  } catch(e){ sfxPoisonSynth(); }
+}
+function sfxPoisonSynth(){   /* 回退：WebAudio 合成的咕噜冒泡 */
+  try {
+    var ac = slotAC(), t0 = ac.currentTime;
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(220, t0);
+    o.frequency.exponentialRampToValueAtTime(120, t0 + 1.2);
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.exponentialRampToValueAtTime(0.4, t0 + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.4);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + 1.45);
+    for (var k = 0; k < 3; k++){
+      var b = ac.createOscillator(), bg = ac.createGain(), ts = t0 + 0.15 + k * 0.32;
+      b.type = 'sine';
+      b.frequency.setValueAtTime(260 + k * 40, ts);
+      b.frequency.exponentialRampToValueAtTime(640 + k * 60, ts + 0.1);
+      bg.gain.setValueAtTime(0.001, ts);
+      bg.gain.exponentialRampToValueAtTime(0.25, ts + 0.02);
+      bg.gain.exponentialRampToValueAtTime(0.001, ts + 0.12);
+      b.connect(bg); bg.connect(ac.destination);
+      b.start(ts); b.stop(ts + 0.14);
+    }
+  } catch(e){}
+}
 /* ===== 老虎机音效（天命轮盘专用）：拉杆 → 逐格咔哒（跟转盘动画同步） → 落定叮当 ===== */
 var _slotAC = null;
 function slotAC(){
@@ -2686,6 +2729,13 @@ function sfxPreload(){
       _sfxCache[k] = a;
     } catch(e){}
   }
+  try {   /* 毒药音效是 wav（合成独特下毒声），单独预载 */
+    var pw = new Audio('sfx/poison.wav');
+    pw.preload = 'auto'; pw.volume = 1;
+    pw.onerror = function(){ delete _sfxCache['poison']; };
+    pw.load();
+    _sfxCache['poison'] = pw;
+  } catch(e){}
 }
 /* 翻牌音效（女巫的毒药点卡牌时） */
 function playFlip(){ sfxPlay(FLIP_OPTS.filter(function(x){ return x.k === curFlipSfx; })[0] || FLIP_OPTS[0]); }
@@ -2919,6 +2969,11 @@ function cupEnd(ev){
     var pevs = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
     bindAll(cup, pevs.map(function(n, i){ return [n, DOWN[i]]; }), true);
     bindAll(zone, pevs.map(function(n, i){ return [n, DOWN[i]]; }), true);
+    /* iOS 兜底：个别 WebView 不认 touch-action，拖盅手势会被页面滚动抢走（pointercancel）→ 盖不上。
+       拖动期间对 touchmove 一律 preventDefault，浏览器就不会接管滚动 */
+    var tmBlock = function(ev){ if (cupDrag && ev.cancelable) ev.preventDefault(); };
+    cup.addEventListener('touchmove', tmBlock, { passive:false });
+    zone.addEventListener('touchmove', tmBlock, { passive:false });
   } else {
     var tevs = ['touchstart', 'touchmove', 'touchend', 'mousedown', 'mousemove', 'mouseup'];
     var thand = [cupDown, cupMove, cupEnd, cupDown, cupMove, cupEnd];
@@ -3051,6 +3106,15 @@ function ptShakeCupSettle(){
     return;
   }
   PT.cupOpen = false;
+  /* 真点数立刻画到骰面上（扣着看不见）——修复：之前留随机面，拖盅起来先露随机、到顶才换真点数 = "骰子会变" */
+  if (PT.myRolls){
+    var ds2 = $('diceLine').children;
+    for (var i2 = 0; i2 < ds2.length && i2 < PT.myRolls.length; i2++){
+      ds2[i2].style.transform = '';
+      dieFace(ds2[i2], PT.myRolls[i2], PT.myRolls[i2]);
+    }
+    PT.paintedKey = 'dc:' + (PT.rollSeq || 0) + ':' + PT.myRolls.join('');   /* 本状态已画，轮询别再动 */
+  }
   /* 扣着等开：可以拖了 */
   $('cup3d').classList.add('swipeable');
   hint.textContent = '↑ 上滑开盅 · ↓ 下滑盖上';
@@ -3131,7 +3195,9 @@ function paintDiceSync(){
     cup.style.transform = '';
     for (var r0 = 0; r0 < ds.length; r0++){
       ds[r0].style.transform = '';
-      dieFace(ds[r0], 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6));
+      /* 有真点数就画真点数（扣着看不见，但拖盅起来会露出来）——别再画随机面 */
+      if (PT.myRolls && r0 < PT.myRolls.length) dieFace(ds[r0], PT.myRolls[r0], PT.myRolls[r0]);
+      else dieFace(ds[r0], 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6));
     }
     if (PT.myRolls){
       /* 扣着且有自己的点数 → 保持可拖（修复：轮询重绘撕掉 swipeable，看起来像"打不开"） */
