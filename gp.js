@@ -346,6 +346,14 @@ function actMutator(room, me, b){
       poison:-1, clicked:[], boomedIdx:-1, boomedPid:null, turn: partyFirst(room) };
     return done();
   }
+  if (act === 'brestart'){
+    if (!me.isHost) return fail('只有房主能重新开始');
+    /* 重新开始：回到第 1 轮全新一盘（保留本桌自定义的图标/数量） */
+    var _ic = (g && g.icon) || 'cameo', _sz = (g && g.size) || 16, _cl = (g && g.cols) || 4;
+    room.game = { type:'bomb', phase:'set', round:1, size:_sz, cols:_cl, icon:_ic,
+      poison:-1, clicked:[], boomedIdx:-1, boomedPid:null, turn: partyFirst(room) };
+    return done();
+  }
   if (act === 'wheelstart'){
     room.game = { type:'wheel', phase:'ready', turn: partyFirst(room), personPid:null, actionIdx:-1, seq:0 };
     return done();
