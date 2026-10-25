@@ -148,7 +148,7 @@
      线上版（https）：探测店里局域网服务，探测到 = 连了店 WiFi → 顶部亮「极速版」入口
      局域网版（http）：给出门用流量的客人留线上版入口 */
   var isLanPage = location.protocol === 'http:';
-  var LAN_URL = 'http://192.168.100.28:8877';   /* 店里服务 IP，变了改这里 */
+  var LAN_URL = 'http://192.168.100.200:8877';   /* 店里服务 IP，变了改这里 */
   var ONLINE_URL = 'https://fanggao170-del.github.io/cameo-party/';
   try { document.getElementById('verLine').textContent = isLanPage ? '店里极速' : '云端'; } catch (e) {}
   if (isLanPage) {
