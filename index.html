@@ -143,6 +143,9 @@
     tb.innerHTML = table + ' 号桌 <span>· 同桌的人会自动进同一个派对</span>';
   }
   var carry = table ? ('?t=' + encodeURIComponent(table)) : '';
+  /* 餐桌二维码带 juke=1：扫码后直达点歌台（仍需店内 WiFi，点歌要连店里服务） */
+  var wantSong = /[?&]juke=1/.test(location.search);
+  var songQ = wantSong ? (carry ? '&juke=1' : '?juke=1') : '';
 
   /* ===== 线路自动切换 =====
      线上版（https）：探测店里局域网服务，探测到 = 连了店 WiFi → 顶部亮「极速版」入口
@@ -153,12 +156,15 @@
      这里读出最新地址，15 分钟内的登记视为"店内服务在线"。 */
   var LAN_REPO = 'fanggao170-del/cameo-party';
   var LAN_URL = null;   /* 动态解析后填入 */
+  var lanTarget = function () { return LAN_URL + (wantSong ? '/song' : '/') + carry; };
   function toast(msg){ var t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(t.__tm); t.__tm = setTimeout(function(){ t.classList.remove('on'); }, 2600); }
   try { document.getElementById('verLine').textContent = isLanPage ? '店里极速' : '云端'; } catch (e) {}
   if (isLanPage) {
     var wl = document.getElementById('weblink');
     wl.href = ONLINE_URL + carry;
     wl.style.display = 'inline-block';
+    /* 已到店内服务 + 扫的是餐桌码 → 直接进点歌台 */
+    if (wantSong) { location.replace('/song' + carry); return; }
   } else {
     /* ===== 线路自动切换（v1024p 动态地址版）=====
        ① 读 lan.json（匿名 Contents API，公共仓库免费额度足够；失败回退同源静态副本）
@@ -188,7 +194,7 @@
       bar.style.display = 'block';
       bar.querySelector('.t1').textContent = '⚡ 已连上店里 WiFi · 正在切换极速版…';
       bar.querySelector('.t2').textContent = '桌号自动带上，马上就好';
-      setTimeout(function () { location.replace(LAN_URL + '/' + carry); }, 350);
+      setTimeout(function () { location.replace(lanTarget()); }, 350);
     };
     var probeOnce = function () {
       if (gone || !LAN_URL) return;
@@ -201,9 +207,12 @@
     };
     fetchLan().then(function (d) {
       var info = parseLan(d);
-      if (!info) return;   /* ④ 纯线上模式 */
+      if (!info) {   /* ④ 纯线上模式 */
+        if (wantSong) toast('点歌台要连店里 WiFi · 连上后重新扫码即可');
+        return;
+      }
       LAN_URL = info.url;
-      lm.href = LAN_URL + '/' + carry;
+      lm.href = lanTarget();
       lm.style.display = 'block';
       lm.addEventListener('click', remember);
       if (!info.fresh) return;   /* ③ 只留手动保底链接 */
@@ -214,7 +223,7 @@
         if (lu && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000) {
           localStorage.setItem('jl_lan_try', String(Date.now()));
           remember();
-          location.replace(LAN_URL + '/' + carry);
+          location.replace(lanTarget());
           return;
         }
       } catch (e) {}
@@ -222,7 +231,7 @@
       bar.style.display = 'block';
       bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
       bar.querySelector('.t2').textContent = '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
-      bar.onclick = function () { remember(); location.href = LAN_URL + '/' + carry; };
+      bar.onclick = function () { remember(); location.href = lanTarget(); };
       probeOnce();
       var probeIv = setInterval(probeOnce, 2000);
       setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
