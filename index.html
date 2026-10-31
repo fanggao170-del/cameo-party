@@ -120,14 +120,14 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024m·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024p·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
   <div class="toastbox" id="toast"></div>
   <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
 
-<script src="i18n.js?v=1024m"></script>
+<script src="i18n.js?v=1024p"></script>
 <script>
 (function () {
   var tb = document.getElementById('tb');
@@ -148,42 +148,42 @@
      线上版（https）：探测店里局域网服务，探测到 = 连了店 WiFi → 顶部亮「极速版」入口
      局域网版（http）：给出门用流量的客人留线上版入口 */
   var isLanPage = location.protocol === 'http:';
-  var LAN_URL = 'http://192.168.100.200:8877';   /* 店里服务 IP，变了改这里 */
   var ONLINE_URL = 'https://fanggao170-del.github.io/cameo-party/';
+  /* 免固定 IP：店内服务启动后会把当前局域网 IP 发布到线上公共仓库的 lan.json（每 10 分钟心跳）。
+     这里读出最新地址，15 分钟内的登记视为"店内服务在线"。 */
+  var LAN_REPO = 'fanggao170-del/cameo-party';
+  var LAN_URL = null;   /* 动态解析后填入 */
+  function toast(msg){ var t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(t.__tm); t.__tm = setTimeout(function(){ t.classList.remove('on'); }, 2600); }
   try { document.getElementById('verLine').textContent = isLanPage ? '店里极速' : '云端'; } catch (e) {}
   if (isLanPage) {
     var wl = document.getElementById('weblink');
     wl.href = ONLINE_URL + carry;
     wl.style.display = 'inline-block';
   } else {
-    /* 常驻手动入口：自动探测可能被浏览器拦，这里给一条保底的路 */
-    var lm = document.getElementById('lanManual');
-    lm.href = LAN_URL + '/' + carry;
-    lm.style.display = 'block';
-    /* ===== 线路探测与切换策略（v1024m 重做）=====
-       【根因】新版 iOS / 微信浏览器把「https 页面偷偷探测 http 内网」一律拦死
-       （混合内容 + Private Network Access），fetch 和 Image 探测全都到不了店里服务
-       → 纯自动探测在现代手机上基本失效，用户表现为「连着 WiFi 扫码也不切极速版」。
-       【新策略】
-       ① 探测继续保留（旧浏览器/安卓部分 WebView 仍有效），2 秒一次 × 20 秒，成功即自动跳；
-       ② 「一键进入店内极速版」按钮不再等 4 秒，进来立刻亮出（探测失败也能一秒点进去）；
-       ③ 记住用过极速版：点过按钮的设备写 localStorage(jl_lan_used, 12 小时有效)，
-          之后再扫码 → 不用探测直接自动跳极速版（常客零操作）；
-          跳失败回到本页 30 秒内不重复自动跳（防循环），手动按钮兜底。 */
-    var gone = false;   /* 已经决定切换（防重复跳转） */
+    /* ===== 线路自动切换（v1024p 动态地址版）=====
+       ① 读 lan.json（匿名 Contents API，公共仓库免费额度足够；失败回退同源静态副本）
+       ② 登记新鲜 → 亮「极速版」按钮 + 常客自动跳 + 旧浏览器探测跳
+       ③ 登记过期（店里电脑关机超 15 分钟）→ 只留手动保底链接
+       ④ 从没登记过 → 纯线上模式，不显示入口 */
+    var gone = false;
     var probeN = 0;
     var bar = document.getElementById('lanbar');
-    var remember = function () { try { localStorage.setItem('jl_lan_used', JSON.stringify({ t: Date.now(), u: LAN_URL })); } catch (e) {} };
-    try {
-      var lu = JSON.parse(localStorage.getItem('jl_lan_used') || '0');
-      var lt = parseInt(localStorage.getItem('jl_lan_try') || '0', 10);
-      if (lu && lu.u === LAN_URL && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000){
-        localStorage.setItem('jl_lan_try', String(Date.now()));
-        location.replace(LAN_URL + '/' + carry);
-      }
-    } catch (e) {}
+    var lm = document.getElementById('lanManual');
+    var remember = function () { try { localStorage.setItem('jl_lan_used', JSON.stringify({ t: Date.now() })); } catch (e) {} };
+    function parseLan(d) {
+      if (!d || !d.ips || !d.ips.length) return null;
+      return { url: 'http://' + d.ips[0] + ':' + (d.port || 8877), fresh: (Date.now() - (d.t || 0)) < 15 * 60 * 1000 };
+    }
+    function fetchLan() {
+      return fetch('https://api.github.com/repos/' + LAN_REPO + '/contents/lan.json?_=' + Date.now(), { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } })
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (j) { try { return JSON.parse(decodeURIComponent(escape(atob(String(j.content).replace(/\s/g, ''))))); } catch (e) { return null; } })
+        .catch(function () {
+          return fetch('./lan.json?_=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+        });
+    }
     var goLan = function () {
-      if (gone) return; gone = true;
+      if (gone || !LAN_URL) return; gone = true;
       remember();
       bar.style.display = 'block';
       bar.querySelector('.t1').textContent = '⚡ 已连上店里 WiFi · 正在切换极速版…';
@@ -191,7 +191,7 @@
       setTimeout(function () { location.replace(LAN_URL + '/' + carry); }, 350);
     };
     var probeOnce = function () {
-      if (gone) return;
+      if (gone || !LAN_URL) return;
       try { fetch(LAN_URL + '/ping.png?t=' + Date.now(), { mode: 'no-cors', cache: 'no-store' }).then(function () { goLan(); }).catch(function () {}); } catch (e) {}
       try {
         var img = new Image();
@@ -199,15 +199,34 @@
         img.src = LAN_URL + '/ping.png?t=' + Date.now() + '&n=' + (++probeN);
       } catch (e) {}
     };
-    /* 手动按钮立即亮出（不再等 4 秒） */
-    bar.style.display = 'block';
-    bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
-    bar.querySelector('.t2').textContent = '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
-    bar.onclick = function () { remember(); location.href = LAN_URL + '/' + carry; };
-    lm.addEventListener('click', remember);
-    probeOnce();
-    var probeIv = setInterval(probeOnce, 2000);
-    setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
+    fetchLan().then(function (d) {
+      var info = parseLan(d);
+      if (!info) return;   /* ④ 纯线上模式 */
+      LAN_URL = info.url;
+      lm.href = LAN_URL + '/' + carry;
+      lm.style.display = 'block';
+      lm.addEventListener('click', remember);
+      if (!info.fresh) return;   /* ③ 只留手动保底链接 */
+      /* 常客：用过极速版的设备 12 小时内再扫码直接自动跳（30 秒防循环） */
+      try {
+        var lu = JSON.parse(localStorage.getItem('jl_lan_used') || '0');
+        var lt = parseInt(localStorage.getItem('jl_lan_try') || '0', 10);
+        if (lu && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000) {
+          localStorage.setItem('jl_lan_try', String(Date.now()));
+          remember();
+          location.replace(LAN_URL + '/' + carry);
+          return;
+        }
+      } catch (e) {}
+      /* ② 手动按钮立即亮出（现代浏览器拦自动探测，按钮一秒可点） */
+      bar.style.display = 'block';
+      bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
+      bar.querySelector('.t2').textContent = '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
+      bar.onclick = function () { remember(); location.href = LAN_URL + '/' + carry; };
+      probeOnce();
+      var probeIv = setInterval(probeOnce, 2000);
+      setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
+    });
   }
 
   btnParty.onclick = function () {
@@ -218,11 +237,11 @@
   /* 扫码点歌：店内 → 点歌台（与派对同一个服务 /song）；线上 → 先探测店里服务可达再带桌号跳过去 */
   var btnSong = document.getElementById('btnSong');
   btnSong.onclick = function () {
-    var target = LAN_URL + '/song' + carry;
     if (isLanPage) { location.href = '/song' + carry; return; }
+    if (!LAN_URL) { toast('没连上店里服务 · 连上店内 WiFi 后再点'); return; }
     /* https 页面顶层跳转 http 不被拦；先探测店里服务在不在线，避免点了看到裸错误页 */
     var img = new Image();
-    img.onload = function () { location.href = target; };
+    img.onload = function () { location.href = LAN_URL + '/song' + carry; };
     img.onerror = function () {
       toast('没连上店里服务 · 连上店内 WiFi 后再点');
     };
