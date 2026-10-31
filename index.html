@@ -83,6 +83,30 @@
     border-radius:999px; cursor:pointer; font-weight:900; letter-spacing:1px; font-family:inherit;
   }
   .langbtn:active{transform:scale(.94);}
+  /* 未连店内 WiFi 时的拦截提示：点歌必须和店里服务在同一局域网 */
+  .wifimask{
+    position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center;
+    padding:24px; background:rgba(8,6,14,.86); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  }
+  .wifimask.on{display:flex;}
+  .wificard{
+    width:100%; max-width:360px; padding:26px 22px 20px; border-radius:22px; text-align:center;
+    background:linear-gradient(160deg,#1B1526,#120E1C); border:1px solid rgba(255,215,94,.35);
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.9);
+  }
+  .wifiico{font-size:40px; line-height:1; margin-bottom:12px;}
+  .wifit{font-size:19px; font-weight:900; letter-spacing:.5px; color:#FFE6A8;}
+  .wifis{margin:10px 0 20px; font-size:13px; line-height:1.7; color:#A99FB8;}
+  .wifibtn{
+    display:block; width:100%; padding:14px; border-radius:14px; border:none; cursor:pointer;
+    font:inherit; font-size:16px; font-weight:900; color:#2A1B06;
+    background:linear-gradient(140deg,#F0C86B,#C08A34); box-shadow:0 12px 26px -14px rgba(240,200,107,.9);
+  }
+  .wifibtn:active{transform:scale(.98);}
+  .wifibtn.ghost{
+    margin-top:10px; background:rgba(255,255,255,.06); color:#A99FB8; font-size:14px; font-weight:700;
+    border:1px solid rgba(255,255,255,.14); box-shadow:none;
+  }
 </style>
 </head>
 <body>
@@ -120,14 +144,25 @@
   <div class="foot" id="foot">
     <b>扫同一张桌卡的人自动进同一桌派对</b><br>
     第一个进来的是房主 · 可以邀请微信好友<br>
-    <span style="opacity:.7;">版本 v1024p·<em id="verLine" style="font-style:normal;">…</em></span>
+    <span style="opacity:.7;">版本 v1024q·<em id="verLine" style="font-style:normal;">…</em></span>
   </div>
   <a id="lanManual" href="#" style="display:none;margin:-8px auto 0;font-size:12px;color:#7EE3A2;text-decoration:underline;">在店里？点此进入店内极速版（快 50 倍）→</a>
 
   <div class="toastbox" id="toast"></div>
+
+  <div class="wifimask" id="wifiMask">
+    <div class="wificard">
+      <div class="wifiico">📶</div>
+      <div class="wifit">请先连接WiFi才能点歌</div>
+      <div class="wifis">点歌台在店里的电脑上运行，手机需要连上店内的 Wi-Fi<br>（和店里电脑同一个局域网）才能点歌。</div>
+      <button class="wifibtn" id="wifiRetry" type="button">我已连上 WiFi · 重新检测</button>
+      <button class="wifibtn ghost" id="wifiClose" type="button">先玩酒令派对</button>
+    </div>
+  </div>
+
   <a class="weblink" id="weblink" href="#">出门用流量？打开线上版 →</a>
 
-<script src="i18n.js?v=1024p"></script>
+<script src="i18n.js?v=1024q"></script>
 <script>
 (function () {
   var tb = document.getElementById('tb');
@@ -158,6 +193,17 @@
   var LAN_URL = null;   /* 动态解析后填入 */
   var lanTarget = function () { return LAN_URL + (wantSong ? '/song' : '/') + carry; };
   function toast(msg){ var t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(t.__tm); t.__tm = setTimeout(function(){ t.classList.remove('on'); }, 2600); }
+  /* 点歌拦截：手机不在店内局域网时，不能点歌，必须明确提示先连 WiFi */
+  var wifiMask = document.getElementById('wifiMask');
+  var lanRetry = null;   /* 由线上分支注入：重新读 lan.json 并重试 */
+  function showWifiMask(){ if (wifiMask) wifiMask.classList.add('on'); }
+  function hideWifiMask(){ if (wifiMask) wifiMask.classList.remove('on'); }
+  document.getElementById('wifiClose').onclick = hideWifiMask;
+  document.getElementById('wifiRetry').onclick = function () {
+    hideWifiMask();
+    if (lanRetry) { lanRetry(); return; }
+    location.reload();
+  };
   try { document.getElementById('verLine').textContent = isLanPage ? '店里极速' : '云端'; } catch (e) {}
   if (isLanPage) {
     var wl = document.getElementById('weblink');
@@ -205,37 +251,50 @@
         img.src = LAN_URL + '/ping.png?t=' + Date.now() + '&n=' + (++probeN);
       } catch (e) {}
     };
-    fetchLan().then(function (d) {
-      var info = parseLan(d);
-      if (!info) {   /* ④ 纯线上模式 */
-        if (wantSong) toast('点歌台要连店里 WiFi · 连上后重新扫码即可');
-        return;
-      }
-      LAN_URL = info.url;
-      lm.href = lanTarget();
-      lm.style.display = 'block';
-      lm.addEventListener('click', remember);
-      if (!info.fresh) return;   /* ③ 只留手动保底链接 */
-      /* 常客：用过极速版的设备 12 小时内再扫码直接自动跳（30 秒防循环） */
-      try {
-        var lu = JSON.parse(localStorage.getItem('jl_lan_used') || '0');
-        var lt = parseInt(localStorage.getItem('jl_lan_try') || '0', 10);
-        if (lu && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000) {
-          localStorage.setItem('jl_lan_try', String(Date.now()));
-          remember();
-          location.replace(lanTarget());
+    var tryLan = function () {
+      fetchLan().then(function (d) {
+        var info = parseLan(d);
+        if (!info) {   /* ④ 纯线上模式：店里服务从没登记过 → 点歌直接拦下 */
+          if (wantSong) showWifiMask();
           return;
         }
-      } catch (e) {}
-      /* ② 手动按钮立即亮出（现代浏览器拦自动探测，按钮一秒可点） */
-      bar.style.display = 'block';
-      bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
-      bar.querySelector('.t2').textContent = '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
-      bar.onclick = function () { remember(); location.href = lanTarget(); };
-      probeOnce();
-      var probeIv = setInterval(probeOnce, 2000);
-      setTimeout(function () { clearInterval(probeIv); }, 20000);   /* 20 秒后放弃自动探测（手动入口仍在） */
-    });
+        LAN_URL = info.url;
+        lm.href = lanTarget();
+        lm.style.display = 'block';
+        lm.addEventListener('click', remember);
+        if (!info.fresh) {   /* ③ 登记过期（店里电脑关机/断网）→ 点歌拦下 */
+          if (wantSong) showWifiMask();
+          return;
+        }
+        /* 常客：用过极速版的设备 12 小时内再扫码直接自动跳（30 秒防循环） */
+        try {
+          var lu = JSON.parse(localStorage.getItem('jl_lan_used') || '0');
+          var lt = parseInt(localStorage.getItem('jl_lan_try') || '0', 10);
+          if (lu && Date.now() - lu.t < 12 * 3600 * 1000 && Date.now() - lt > 30000) {
+            localStorage.setItem('jl_lan_try', String(Date.now()));
+            remember();
+            location.replace(lanTarget());
+            return;
+          }
+        } catch (e) {}
+        /* ② 手动按钮立即亮出（现代浏览器拦自动探测，按钮一秒可点） */
+        bar.style.display = 'block';
+        bar.querySelector('.t1').textContent = '⚡ 一键进入店内极速版';
+        bar.querySelector('.t2').textContent = wantSong
+          ? '点歌要连店里 WiFi · 连上后点这里进点歌台'
+          : '连店里 WiFi 快 50 倍 · 探测成功会自动切，没切就点一下';
+        bar.onclick = function () { remember(); location.href = lanTarget(); };
+        probeOnce();
+        var probeIv = setInterval(probeOnce, 2000);
+        setTimeout(function () {
+          clearInterval(probeIv);
+          /* 点歌入口：探测不通 = 手机不在店内局域网 → 明确提示先连 WiFi */
+          if (wantSong && !gone) showWifiMask();
+        }, 8000);
+      });
+    };
+    lanRetry = tryLan;   /* 弹窗里「重新检测」按钮走这里 */
+    tryLan();
   }
 
   btnParty.onclick = function () {
@@ -247,13 +306,11 @@
   var btnSong = document.getElementById('btnSong');
   btnSong.onclick = function () {
     if (isLanPage) { location.href = '/song' + carry; return; }
-    if (!LAN_URL) { toast('没连上店里服务 · 连上店内 WiFi 后再点'); return; }
+    if (!LAN_URL) { showWifiMask(); return; }
     /* https 页面顶层跳转 http 不被拦；先探测店里服务在不在线，避免点了看到裸错误页 */
     var img = new Image();
     img.onload = function () { location.href = LAN_URL + '/song' + carry; };
-    img.onerror = function () {
-      toast('没连上店里服务 · 连上店内 WiFi 后再点');
-    };
+    img.onerror = function () { showWifiMask(); };
     img.src = LAN_URL + '/ping.png?t=' + Date.now();
   };
 })();
