@@ -1,3 +1,7 @@
+/* 外网版已下线（2026-11-12）：https 页面一律弹回店内局域网极速版 */
+if (typeof location !== "undefined" && location.protocol === "https:") {
+  location.replace("http://192.168.100.200:8877/game.html" + location.search);
+}
 /* ============================================================
  * CAMEO 酒令派对 · gp.js（GitHub 云端版派对引擎）
  * ------------------------------------------------------------
